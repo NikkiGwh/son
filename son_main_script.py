@@ -290,6 +290,12 @@ class Son:
     def get_euclidean_distance(self, pos1: tuple[float, float], pos2: tuple[float, float]):
         return round(math.dist(pos1, pos2), 4)
 
+    def vec_length(self, v):
+        return math.sqrt(np.dot(v, v))
+
+    def vec_cos(self, a, b):
+        return np.dot(a, b)/(self.vec_length(a)*self.vec_length(b))
+
     ########################## network filter and sort helpers ###################
 
     def filter_active_bs_nodes(self, node):
