@@ -58,6 +58,10 @@ class Son:
                                       sheet_name="cells", header=0, index_col=0)
         self.traffic_profile_pd = pd.read_excel(
             io=self.network_filename, sheet_name="traffic_profiles", index_col=0)
+
+        # initialize super parameter
+        self.min_rssi = 0.8
+
         # initialize network
         self.graph = nx.Graph()
         self.initialize_nodes()
@@ -70,7 +74,7 @@ class Son:
     def initialize_nodes(self):
         """initialize all static node attributes
          bs_node (active, pos_x, pos_y, type, tx_power,
-                 static_power, capacity, frequency, initial_cells, range)
+                 static_power, capacity, frequency, initial_cells)
 
         cell_node (pos_x, pos_y, max_traffic,
                    shadow_component, type, traffic_profile_id)
@@ -95,11 +99,10 @@ class Son:
             for _, bs_node in enumerate(
                     filter(self.filter_bs_nodes, self.graph.nodes.data())):
 
-                current_distance = self.get_euclidean_distance(
-                    (cell[1]["pos_x"], cell[1]["pos_y"]), (bs_node[1]["pos_x"], bs_node[1]["pos_y"]))
-                if current_distance <= bs_node[1]["range"]:
+                current_rssi = self.get_received_power(cell[0], (cell[0], bs_node[0]))
+                if current_rssi >= self.min_rssi:
                     attribute_dic = {}
-                    attribute_dic["distance"] = current_distance
+                    attribute_dic["distance"] = current_rssi
                     edge_list_with_attributes.append(
                         (cell[0], bs_node[0], attribute_dic))
 
@@ -125,7 +128,7 @@ class Son:
         node_edge_color_dict = {"active": "#aaff80",
                                 "inactive": "grey", "cell": "black", "overload": "#ff0000"}
         node_color_dict = {"macro": "orange", "micro": "blue",
-                           "femto": "yellow", "inactive": "grey", "cell": "yellow"}
+                           "femto": "yellow", "inactive": "grey", "cell": "black"}
         node_sizes_dict = {"macro": 300, "micro": 100, "femto": 80, "cell": 50}
 
         for _, node in enumerate(self.graph.nodes.data()):
@@ -319,15 +322,18 @@ class Son:
             calculate signal in cell from bs station of given beam (taking angle between this beam and
             optimal beam to bs into consideration)
         """
-        wave_length = 80
         beam_vector = self.get_directional_vec(target_node_id=beam[0], source_node_id=beam[1])
         optimal_beam_vector = self.get_directional_vec(cell_id, beam[1])
         cos_beta = self.vec_cos(beam_vector, optimal_beam_vector)
         if cos_beta <= 0 or cos_beta > 1:
             return 0
-
+        wave_length = self.graph.nodes.data()[beam[1]]["wave_length"]
         transmission_power = self.graph.nodes.data()[beam[1]]["tx_power"]
-        distance = self.graph[cell_id][beam[1]]["distance"]
+        distance = self.get_euclidean_distance(
+            (self.graph.nodes.data()[cell_id]["pos_x"],
+             self.graph.nodes.data()[cell_id]["pos_y"]),
+            (self.graph.nodes.data()[beam[1]]["pos_x"],
+             self.graph.nodes.data()[beam[1]]["pos_y"]))
 
         return round(transmission_power * cos_beta * math.pow((wave_length / (4*math.pi*distance)), 2), 4)
 
@@ -786,7 +792,6 @@ class Son:
         label_dic = {}
         for _, cell_node in enumerate(filter(self.filter_cell_nodes, self.graph.nodes.data())):
             label_dic[cell_node[0]] = cell_node[1]["rssi"]
-
 
         pos_label: dict[str, list[int]] = {}
 
