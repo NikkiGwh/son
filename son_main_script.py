@@ -40,6 +40,14 @@ class BinPackingType(Enum):
     WORST_FIT = 2
 
 
+class NodeType(Enum):
+    CELL = "cell"
+    MICRO = "micro"
+    MACRO = "macro"
+    FEMTO = "femto"
+    PICO = "pico"
+
+
 class Son:
     def __init__(self, hour=1) -> None:
         # read input data
@@ -48,71 +56,64 @@ class Son:
                                            header=0, index_col=0, dtype={"initial_cells": object})
         self.cells_pd = pd.read_excel(io=self.network_filename,
                                       sheet_name="cells", header=0, index_col=0)
-        adjacencies_pd = pd.read_excel(io=self.network_filename,
-                                       sheet_name="adjacencies", index_col=0)
         self.traffic_profile_pd = pd.read_excel(
             io=self.network_filename, sheet_name="traffic_profiles", index_col=0)
         # initialize network
-        self.graph: nx.Graph = nx.convert_matrix.from_pandas_adjacency(adjacencies_pd)
-        self.initialize_node_attributes()
-        self.initialize_edge_attributes()
+        self.graph = nx.Graph()
+        self.initialize_nodes()
+        self.initialize_edges()
         self.hour = hour
         self.update_network_attributes()
 
     ############ network initialization methods ##########
 
-    def initialize_node_pos(self):
-        """get node positions as dict
-
-        Returns:
-            pos (dict[str, list[int]]): as dict of pos-list for each node
-        """
-        pos: dict[str, list[int]] = {}
-        # add all bs_stations positions
-        for index, row in self.bs_staions_pd.iterrows():
-            pos[str(index)] = [row["pos_x"], row["pos_y"]]
-
-        # add all cell positions
-        for index, row in self.cells_pd.iterrows():
-            pos[str(index)] = [row["pos_x"], row["pos_y"]]
-        return pos
-
-    def initialize_node_attributes(self):
+    def initialize_nodes(self):
         """initialize all static node attributes
+         bs_node (active, pos_x, pos_y, type, tx_power,
+                 static_power, capacity, frequency, initial_cells, range)
 
-        bs_node (active, pos_x, pos_y, type, tx_power,
-                 static_power, capacity, frequency, initial_cells)
-
-        cell_node (pos_x, pos_y, max_traffic, noise, interference,
+        cell_node (pos_x, pos_y, max_traffic,
                    shadow_component, type, traffic_profile_id)
         """
-        # add all bs_stations attributes
-        data: dict[str, dict] = {}
+        nodesList_with_attributes: list[tuple[str, dict]] = []
+
         for index, row in self.bs_staions_pd.iterrows():
-            data[str(index)] = row.to_dict()
-            data[str(index)]["active"] = True
+            attribute_dic = row.to_dict()
+            attribute_dic["active"] = True
+            nodesList_with_attributes.append((str(index), attribute_dic))
 
         # add all cell attributes
         for index, row in self.cells_pd.iterrows():
-            data[str(index)] = row.to_dict()
-        nx.classes.function.set_node_attributes(self.graph, data)
+            attribute_dic = row.to_dict()
+            nodesList_with_attributes.append((str(index), attribute_dic))
+        self.graph.add_nodes_from(nodesList_with_attributes)
 
-    def initialize_edge_attributes(self):
-        """initialize static edge attributes and initial active values form pd list(active, distance, sinr)"""
+    def initialize_edges(self):
+        edge_list_with_attributes: list[tuple[str, str, dict]] = []
+        for _, cell in enumerate(filter(self.filter_cell_nodes, self.graph.nodes.data())):
+
+            for _, bs_node in enumerate(
+                    filter(self.filter_bs_nodes, self.graph.nodes.data())):
+
+                current_distance = self.get_euclidean_distance(
+                    (cell[1]["pos_x"], cell[1]["pos_y"]), (bs_node[1]["pos_x"], bs_node[1]["pos_y"]))
+                if current_distance <= bs_node[1]["range"]:
+                    attribute_dic = {}
+                    attribute_dic["distance"] = current_distance
+                    edge_list_with_attributes.append(
+                        (cell[0], bs_node[0], attribute_dic))
+
+        self.graph.add_edges_from(edge_list_with_attributes)
+
+        # set initial active edges attribute
         for _, edge in enumerate(self.graph.edges.data()):
-            # set initial active from pd dataFrame
-            initial_cell_list = str.split(self.bs_staions_pd.at[str(edge[1]), "initial_cells"], ",")
-            if (edge[0] in initial_cell_list):
+
+            initial_cell_list = str.split(self.bs_staions_pd.at[str(edge[0]), "initial_cells"], ",")
+
+            if (edge[1] in initial_cell_list):
                 self.graph[edge[0]][edge[1]]["active"] = True
             else:
                 self.graph[edge[0]][edge[1]]["active"] = False
-
-            # set distance and sinr
-            cell_node = self.graph.nodes[edge[0]]
-            bs_node = self.graph.nodes[edge[1]]
-            edge[2]["distance"] = self.get_euclidean_distance(
-                (cell_node["pos_x"], cell_node["pos_y"]), (bs_node["pos_x"], bs_node["pos_y"]))
-            edge[2]["sinr"] = self.get_sinr(bs_node["range"], edge[2]["distance"])
 
     def get_node_style(self):
         node_colors: list[str] = []
@@ -124,7 +125,7 @@ class Son:
         node_edge_color_dict = {"active": "#aaff80",
                                 "inactive": "grey", "cell": "black", "overload": "#ff0000"}
         node_color_dict = {"macro": "orange", "micro": "blue",
-                           "femto": "yellow", "inactive": "grey", "cell": "black"}
+                           "femto": "yellow", "inactive": "grey", "cell": "yellow"}
         node_sizes_dict = {"macro": 300, "micro": 100, "femto": 80, "cell": 50}
 
         for _, node in enumerate(self.graph.nodes.data()):
@@ -158,7 +159,7 @@ class Son:
                     node_alphas.append(alpha_value_dict["inactive"])
 
             elif node[1]["type"] == "cell":
-                node_colors.append("black")
+                node_colors.append(node_color_dict["cell"])
                 node_alphas.append(alpha_value_dict["cell"])
                 node_edge_colors.append(node_edge_color_dict["cell"])
                 sizes.append(node_sizes_dict["cell"])
@@ -186,12 +187,12 @@ class Son:
 
     def update_network_attributes(self):
         """update all dynamic node and edge attributes in the right order"""
+        self.update_edge_attributes()
         self.update_cell_node_attributes()
         self.update_bs_node_attributes()
-        # update_edge_attributes()
 
     def update_bs_node_attributes(self):
-        """update dynamic bs_node attributes (throughput, traffic, dynamic_power)
+        """update dynamic bs_node attributes (throughput, traffic, dynamic_power, load, active)
         also deactivate bs stations which don't have active edges
         """
         # deactivate bs stations which don't have active edges
@@ -230,24 +231,27 @@ class Son:
                 bs_node[1]["tx_power"], traffic_sum)
 
     def update_cell_node_attributes(self):
-        """update dynamic cell_node attributes depending on active edge and hour (sinr, traffic)"""
+        """ update dynamic cell_node attributes depending on active edge and hour (sinr, traffic, rssi)
+
+        """
 
         for _, cell_node in enumerate(filter(self.filter_cell_nodes, self.graph.nodes.data())):
             # update current traffic considering hour
             load = self.traffic_profile_pd.at[self.hour, cell_node[1]["traffic_profile_id"]]
             cell_node[1]["traffic"] = load * cell_node[1]["max_traffic"]
-
-            # update current sinr for cell_node depending on connected bs
-            for _, neighbor in enumerate(self.graph[cell_node[0]].items()):
-                if neighbor[1]["active"] is True:
-                    cell_node[1]["sinr"] = neighbor[1]["sinr"]
-                    break
+            cell_node[1]["sinr"] = self.get_sinr(cell_node[0])
+            connected_bs = self.get_connected_bs_nodeid(cell_node[0])
+            cell_node[1]["rssi"] = self.get_received_power(
+                cell_node[0], (cell_node[0], connected_bs)) if connected_bs is not None else 0
 
     def update_edge_attributes(self):
-        """updates dynamic edge attributes (currently no dynamic attributes so not used)"""
+        """ updates dynamic edge attributes (sinr)
+
+            only call this after edges active attribute was set properly
+            -> active attribute is set via set_edge_active method
+        """
         for _, edge in enumerate(self.graph.edges.data()):
-            print(edge)
-            print("-------")
+            return
 
     def set_edge_active(self, cell_node_name: str, bs_node_name: str, active: bool):
         """activates or deactivates edge and triggers node attribute updates
@@ -284,19 +288,73 @@ class Son:
     def get_transmission_power(self, receiver_sensitivity: float, traffic: float):
         return round(receiver_sensitivity * traffic, 4)
 
-    def get_sinr(self, bs_range: float, distance: float):
-        return round(bs_range/(distance**2), 4)
+    def get_sinr(self, cell_id: str):
+
+        # calculate interfering signals for cell_id
+        # only bs nodes in range of cell have edge -> so no filtering required
+        interference_signal = 0
+
+        # calculate received signal power from active edge
+        connected_bs_id = self.get_connected_bs_nodeid(cell_id)
+        if connected_bs_id is None:
+            return 0
+
+        for _, bs_in_range_id in enumerate(self.graph[cell_id]):
+
+            for _, interfering_cell_id in enumerate(self.graph[bs_in_range_id]):
+                if self.graph[interfering_cell_id][bs_in_range_id]["active"] and interfering_cell_id != cell_id:
+                    interference_signal += self.get_received_power(
+                        cell_id, (interfering_cell_id, bs_in_range_id))
+
+        received_signal_power = self.get_received_power(cell_id, (cell_id, connected_bs_id))
+
+        return round(received_signal_power / (interference_signal + received_signal_power), 4)
+
+    def get_received_power(self, cell_id: str, beam: tuple[str, str]):
+        """ returns received signal power for cell with given beam (edge)
+
+        Args:
+            beam (tuple[str, str]): beam[0] -> cell_id, beam[1] -> bs_id
+
+            calculate signal in cell from bs station of given beam (taking angle between this beam and
+            optimal beam to bs into consideration)
+        """
+        wave_length = 80
+        beam_vector = self.get_directional_vec(target_node_id=beam[0], source_node_id=beam[1])
+        optimal_beam_vector = self.get_directional_vec(cell_id, beam[1])
+        cos_beta = self.vec_cos(beam_vector, optimal_beam_vector)
+        if cos_beta <= 0 or cos_beta > 1:
+            return 0
+
+        transmission_power = self.graph.nodes.data()[beam[1]]["tx_power"]
+        distance = self.graph[cell_id][beam[1]]["distance"]
+
+        return round(transmission_power * cos_beta * math.pow((wave_length / (4*math.pi*distance)), 2), 4)
 
     def get_euclidean_distance(self, pos1: tuple[float, float], pos2: tuple[float, float]):
         return round(math.dist(pos1, pos2), 4)
 
     def vec_length(self, v):
-        return math.sqrt(np.dot(v, v))
+        return round(math.sqrt(np.dot(v, v)), 4)
 
     def vec_cos(self, a, b):
-        return np.dot(a, b)/(self.vec_length(a)*self.vec_length(b))
+        return round(np.dot(a, b)/(self.vec_length(a)*self.vec_length(b)), 4)
+
+    def get_directional_vec(self, target_node_id: str, source_node_id: str):
+        return np.array(
+            [self.graph.nodes.data()[target_node_id]["pos_x"] - self.graph.nodes.data()[source_node_id]
+             ["pos_x"],
+             self.graph.nodes.data()[
+                target_node_id]["pos_y"] - self.graph.nodes.data()[source_node_id]
+             ["pos_y"]])
 
     ########################## network filter and sort helpers ###################
+
+    def get_connected_bs_nodeid(self, cell_node_id) -> str | None:
+        for _, bs_node in enumerate(self.graph[cell_node_id].items()):
+            if bs_node[1]["active"] == True:
+                return bs_node[0]
+        return None
 
     def filter_active_bs_nodes(self, node):
         if node[1]["type"] != "cell":
@@ -627,9 +685,9 @@ class Son:
             cell_order_1: CellOrderOne = CellOrderOne.HIGHEST_TRAFFIC_FIRST,
             cell_order_2: CellOrderTwo = CellOrderTwo.LOWEST_DEGREE_FIRST, bs_order: None |
             list[BaseStationOrder] = None, bin_packing: BinPackingType = BinPackingType.BEST_FIT):
-        """call this to start simulation with desired bin backing settings for 24 hour and saving 
+        """call this to start simulation with desired bin backing settings for 24 hour and saving
         activation profiles to sheet
-        TODO complete doc 
+        TODO complete doc
         """
         result: list[list[str]] = []
         for i in range(24):
@@ -643,6 +701,22 @@ class Son:
         self.save_edge_activation_profile_to_file(result, sheet_name)
 
     ############## visualization methods ####################
+
+    def get_node_pos(self):
+        """get node positions as dict
+
+        Returns:
+            pos (dict[str, list[int]]): as dict of pos-list for each node
+        """
+        pos: dict[str, list[int]] = {}
+        # add all bs_stations positions
+        for index, row in self.bs_staions_pd.iterrows():
+            pos[str(index)] = [row["pos_x"], row["pos_y"]]
+
+        # add all cell positions
+        for index, row in self.cells_pd.iterrows():
+            pos[str(index)] = [row["pos_x"], row["pos_y"]]
+        return pos
 
     def animate_from_encoding(
             self, i, fig: Figure, pos, activation_matrix: list[list[str]],
@@ -680,7 +754,7 @@ class Son:
         activation_matrix = self.get_edge_activation_encoding_from_file(
             sheet_name)
 
-        pos = self.initialize_node_pos()
+        pos = self.get_node_pos()
         fig, _ = plt.subplots(figsize=(10, 6))
 
         anim = animation.FuncAnimation(
@@ -692,7 +766,7 @@ class Son:
         plt.close(fig)
 
     def draw_current_network(self):
-        pos = self.initialize_node_pos()
+        pos = self.get_node_pos()
         node_colors, node_sizes, node_edge_colors, node_alphas = self.get_node_style()
         edge_colors, edge_width = self.get_edge_style()
         options_edges = {
@@ -706,13 +780,27 @@ class Son:
             'node_size': node_sizes,
             "pos": pos,
             "edgecolors": node_edge_colors,
+            "label": ["hallo", "hallo", "hallo"],
         }
+
+        label_dic = {}
+        for _, cell_node in enumerate(filter(self.filter_cell_nodes, self.graph.nodes.data())):
+            label_dic[cell_node[0]] = cell_node[1]["rssi"]
+
+
+        pos_label: dict[str, list[int]] = {}
+
+        for _, pos_item in enumerate(pos.items()):
+            pos_label[str(pos_item[0])] = [pos_item[1][0], pos_item[1][1] + 1]
+
         plt.title(f"{self.hour}'s hour")
         nx.drawing.nx_pylab.draw_networkx_edges(self.graph, **options_edges)
         nx.drawing.nx_pylab.draw_networkx_nodes(self.graph, **options_nodes)
+        nx.drawing.nx_pylab.draw_networkx_labels(
+            self.graph, pos_label, label_dic, font_color="black")
         plt.show()
 
-    def draw_24_hour_profile_results(self, result_sheet_name_list: list[str]):
+    def draw_24_hour_profile_results_diagrams(self, result_sheet_name_list: list[str]):
 
         _, ax_sinr = plt.subplots(layout="constrained")
         _, ax_load = plt.subplots(layout="constrained")
@@ -789,32 +877,33 @@ def main():
     son = Son()
 
     # for testing single hours
-    # son.update_hour(9)
+    son.update_hour(9)
+
+    son.draw_current_network()
 
     # apply bin bin packing an save 24 hour profiles
     # bestFit_highestTrafficFirst_HighestDegreeFirst_bsOrderNone
-    son.start_calculation_bin_packing_save(
-        sheet_name="bf_htf_hdf_bsn",
-        cell_order_1=CellOrderOne.HIGHEST_TRAFFIC_FIRST,
-        cell_order_2=CellOrderTwo.HIGHEST_DEGREE_FIRST, bs_order=None,
-        bin_packing=BinPackingType.BEST_FIT)
+    # son.start_calculation_bin_packing_save(
+    #     sheet_name="bf_htf_hdf_bsn",
+    #     cell_order_1=CellOrderOne.HIGHEST_TRAFFIC_FIRST,
+    #     cell_order_2=CellOrderTwo.HIGHEST_DEGREE_FIRST, bs_order=None,
+    #     bin_packing=BinPackingType.BEST_FIT)
 
     # worstFit_highestTrafficFirst_HighestDegreeFirst_bsOrderNone
-    son.start_calculation_bin_packing_save(
-        sheet_name="wf_htf_tdf_bsn",
-        cell_order_1=CellOrderOne.HIGHEST_TRAFFIC_FIRST,
-        cell_order_2=CellOrderTwo.HIGHEST_DEGREE_FIRST, bs_order=None,
-        bin_packing=BinPackingType.WORST_FIT)
+    # son.start_calculation_bin_packing_save(
+    #     sheet_name="wf_htf_tdf_bsn",
+    #     cell_order_1=CellOrderOne.HIGHEST_TRAFFIC_FIRST,
+    #     cell_order_2=CellOrderTwo.HIGHEST_DEGREE_FIRST, bs_order=None,
+    #     bin_packing=BinPackingType.WORST_FIT)
 
     # draw avg_sinr graphs
-    son.draw_24_hour_profile_results(
-        ["bf_htf_hdf_bsn", "nsga2_l_s_0.5_0.5", "nsga2_l_s_0_1", "nsga2_l_s_1_0"])
+    # son.draw_24_hour_profile_results(
+    #     ["bf_htf_hdf_bsn", "nsga2_l_s_0.5_0.5", "nsga2_l_s_0_1", "nsga2_l_s_1_0"])
 
 
-def animate_result(sheet: str = "nsga2_l_s_0.5_0.5"):
+def animate_result(sheet: str):
     son = Son()
-    son.start_animation_result_from_sheet(
-        "nsga2_l_s_0.5_0.5")
+    son.start_animation_result_from_sheet(sheet)
 
 
 if __name__ == "__main__":
