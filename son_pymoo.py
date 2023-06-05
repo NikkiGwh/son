@@ -29,7 +29,7 @@ class SonProblemElementWise(ElementwiseProblem):
         # prepare network
         self.son = Son(hour=hour)
         self.obj_dict = obj_dict
-        n_var = len(list(filter(self.son.filter_cell_nodes, self.son.graph.nodes.data())))
+        n_var = len(list(filter(self.son.filter_user_nodes, self.son.graph.nodes.data())))
 
         # prepare problem parameter
         binary_activation_profile_encoding = self.son.get_edge_activation_encoding_from_graph()

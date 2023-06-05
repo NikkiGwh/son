@@ -1,8 +1,6 @@
-
 from matplotlib.figure import Figure
 import networkx as nx
 from pyparsing import with_attribute
-import pandas as pd
 from matplotlib import pyplot as plt
 import numpy as np
 from sklearn.metrics import euclidean_distances
@@ -10,16 +8,14 @@ from sklearn.utils import gen_batches
 import math
 import matplotlib.animation as animation
 from enum import Enum
-from functools import reduce
+from functools import reduce, total_ordering
 
 from IPython.core.display import HTML
 from IPython.display import display
+import pandas as pd
 
-
-class CellOrderOne(Enum):
-    RANDOM = 1
-    HIGHEST_TRAFFIC_FIRST = 2
-    LOWEST_TRAFFIC_FIRST = 3
+from networkx.readwrite import json_graph
+import json
 
 
 class CellOrderTwo(Enum):
@@ -51,58 +47,34 @@ class NodeType(Enum):
 class Son:
     def __init__(self, hour=1) -> None:
         # read input data
-        self.network_filename = "./son_input.xlsx"
-        self.bs_staions_pd = pd.read_excel(io=self.network_filename, sheet_name="baseStations",
-                                           header=0, index_col=0, dtype={"initial_cells": object})
-        self.cells_pd = pd.read_excel(io=self.network_filename,
-                                      sheet_name="cells", header=0, index_col=0)
-        self.traffic_profile_pd = pd.read_excel(
-            io=self.network_filename, sheet_name="traffic_profiles", index_col=0)
+        self.network_filename = "./initial_network.json"
 
         # initialize super parameter
         self.min_rssi = 0.8
 
         # initialize network
-        self.graph = nx.Graph()
-        self.initialize_nodes()
+        self.graph = self.load_graph_from_json_adjacency_file("initial_network.json")
+
         self.initialize_edges()
-        self.hour = hour
         self.update_network_attributes()
 
     ############ network initialization methods ##########
 
-    def initialize_nodes(self):
-        """initialize all static node attributes
-         bs_node (active, pos_x, pos_y, type, tx_power,
-                 static_power, capacity, frequency, initial_cells)
-
-        cell_node (pos_x, pos_y, max_traffic,
-                   shadow_component, type, traffic_profile_id)
-        """
-        nodesList_with_attributes: list[tuple[str, dict]] = []
-
-        for index, row in self.bs_staions_pd.iterrows():
-            attribute_dic = row.to_dict()
-            attribute_dic["active"] = True
-            nodesList_with_attributes.append((str(index), attribute_dic))
-
-        # add all cell attributes
-        for index, row in self.cells_pd.iterrows():
-            attribute_dic = row.to_dict()
-            nodesList_with_attributes.append((str(index), attribute_dic))
-        self.graph.add_nodes_from(nodesList_with_attributes)
-
     def initialize_edges(self):
         edge_list_with_attributes: list[tuple[str, str, dict]] = []
-        for _, cell in enumerate(filter(self.filter_cell_nodes, self.graph.nodes.data())):
-
+        # only add edges for cell-bs pairs which hav minimum rssi signal strength
+        for _, cell in enumerate(filter(self.filter_user_nodes, self.graph.nodes.data())):
             for _, bs_node in enumerate(
                     filter(self.filter_bs_nodes, self.graph.nodes.data())):
 
-                current_rssi = self.get_received_power(cell[0], (cell[0], bs_node[0]))
+                current_rssi = self.get_rssi_cell(cell[0], (cell[0], bs_node[0]))
+                current_distance = self.get_euclidean_distance(
+                    (cell[1]["pos_x"], cell[1]["pos_y"]), (bs_node[1]["pos_x"], bs_node[1]["pos_y"]))
+
                 if current_rssi >= self.min_rssi:
                     attribute_dic = {}
-                    attribute_dic["distance"] = current_rssi
+                    attribute_dic["rssi"] = current_rssi
+                    attribute_dic["distance"] = current_distance
                     edge_list_with_attributes.append(
                         (cell[0], bs_node[0], attribute_dic))
 
@@ -110,13 +82,7 @@ class Son:
 
         # set initial active edges attribute
         for _, edge in enumerate(self.graph.edges.data()):
-
-            initial_cell_list = str.split(self.bs_staions_pd.at[str(edge[0]), "initial_cells"], ",")
-
-            if (edge[1] in initial_cell_list):
-                self.graph[edge[0]][edge[1]]["active"] = True
-            else:
-                self.graph[edge[0]][edge[1]]["active"] = False
+            self.graph[edge[0]][edge[1]]["active"] = False
 
     def get_node_style(self):
         node_colors: list[str] = []
@@ -127,12 +93,12 @@ class Son:
         alpha_value_dict = {"active": 1, "inactive": 0.5, "cell": 1}
         node_edge_color_dict = {"active": "#aaff80",
                                 "inactive": "grey", "cell": "black", "overload": "#ff0000"}
-        node_color_dict = {"macro": "orange", "micro": "blue",
+        node_color_dict = {"macro": "orange", "micro": "blue", "pico": "pink",
                            "femto": "yellow", "inactive": "grey", "cell": "black"}
-        node_sizes_dict = {"macro": 300, "micro": 100, "femto": 80, "cell": 50}
+        node_sizes_dict = {"macro": 300, "micro": 100, "femto": 80, "pico": 50, "cell": 50}
 
         for _, node in enumerate(self.graph.nodes.data()):
-            if (node[1]["type"] == "micro"):
+            if (node[1]["type"] == NodeType.MICRO.value):
                 sizes.append(node_sizes_dict["micro"])
                 if node[1]["active"]:
                     node_colors.append(node_color_dict["micro"])
@@ -147,7 +113,7 @@ class Son:
                     node_edge_colors.append(node_edge_color_dict["inactive"])
                     node_alphas.append(alpha_value_dict["inactive"])
 
-            elif node[1]["type"] == "macro":
+            elif node[1]["type"] == NodeType.MACRO.value:
                 sizes.append(node_sizes_dict["macro"])
                 if node[1]["active"]:
                     node_colors.append(node_color_dict["macro"])
@@ -161,7 +127,35 @@ class Son:
                     node_edge_colors.append(node_edge_color_dict["inactive"])
                     node_alphas.append(alpha_value_dict["inactive"])
 
-            elif node[1]["type"] == "cell":
+            elif node[1]["type"] == NodeType.FEMTO.value:
+                sizes.append(node_sizes_dict["femto"])
+                if node[1]["active"]:
+                    node_colors.append(node_color_dict["femto"])
+                    if node[1]["load"] > 1:
+                        node_edge_colors.append(node_edge_color_dict["overload"])
+                    else:
+                        node_edge_colors.append(node_edge_color_dict["active"])
+                    node_alphas.append(alpha_value_dict["active"])
+                else:
+                    node_colors.append((node_color_dict["inactive"]))
+                    node_edge_colors.append(node_edge_color_dict["inactive"])
+                    node_alphas.append(alpha_value_dict["inactive"])
+
+            elif node[1]["type"] == NodeType.PICO.value:
+                sizes.append(node_sizes_dict["pico"])
+                if node[1]["active"]:
+                    node_colors.append(node_color_dict["pico"])
+                    if node[1]["load"] > 1:
+                        node_edge_colors.append(node_edge_color_dict["overload"])
+                    else:
+                        node_edge_colors.append(node_edge_color_dict["active"])
+                    node_alphas.append(alpha_value_dict["active"])
+                else:
+                    node_colors.append((node_color_dict["inactive"]))
+                    node_edge_colors.append(node_edge_color_dict["inactive"])
+                    node_alphas.append(alpha_value_dict["inactive"])
+
+            elif node[1]["type"] == NodeType.CELL.value:
                 node_colors.append(node_color_dict["cell"])
                 node_alphas.append(alpha_value_dict["cell"])
                 node_edge_colors.append(node_edge_color_dict["cell"])
@@ -183,33 +177,29 @@ class Son:
 
     ###################### network update methods ###################
 
-    def update_hour(self, hour: int):
-        """loads new traffic values for according hour and updates network attributes accordingly"""
-        self.hour = hour
-        self.update_network_attributes()
-
     def update_network_attributes(self):
         """update all dynamic node and edge attributes in the right order"""
-        self.update_edge_attributes()
-        self.update_cell_node_attributes()
+        self.update_user_node_attributes()
         self.update_bs_node_attributes()
+        self.update_user_node_dl_datarate()
+        self.update_edge_attributes()
 
     def update_bs_node_attributes(self):
-        """update dynamic bs_node attributes (throughput, traffic, dynamic_power, load, active)
+        """update dynamic bs_node attributes (traffic, total_power, active)
         also deactivate bs stations which don't have active edges
         """
         # deactivate bs stations which don't have active edges
-        # set throughput, dynamic_power to 0 for inactive bs nodes
+        # set traffic, total_power to 0 for inactive bs nodes
         for _, bs_node in enumerate(
             filter(
                 lambda x: self.filter_bs_nodes(node=x),
                 self.graph.nodes.data())):
 
-            connected_cells = [x[0] for x in self.graph[bs_node[0]].items() if x[1]["active"]]
-            if len(connected_cells) == 0:
+            connected_users = [x[0] for x in self.graph[bs_node[0]].items() if x[1]["active"]]
+            if len(connected_users) == 0:
+                # calculation for inactive users
                 self.graph.nodes[bs_node[0]]["active"] = False
-                self.graph.nodes[bs_node[0]]["throughput"] = 0
-                self.graph.nodes[bs_node[0]]["dynamic_power"] = 0
+                self.graph.nodes[bs_node[0]]["total_power"] = 0
                 self.graph.nodes[bs_node[0]]["traffic"] = 0
                 self.graph.nodes[bs_node[0]]["load"] = 0
             else:
@@ -218,43 +208,43 @@ class Son:
         # calculation for active bs
         for _, bs_node in enumerate(filter(self.filter_active_bs_nodes, self.graph.nodes.data())):
             traffic_sum = 0.0
-            # calculate total traffic for bs depending on current connected cells
-            for _, neighbor in enumerate(self.graph[bs_node[0]].items()):
-                if neighbor[1]["active"] is True:
-                    traffic_sum += self.graph.nodes[neighbor[0]]["traffic"]
+            # calculate total traffic for bs depending on current connected users -> per user add 1
+            for _, user_edge in enumerate(self.graph[bs_node[0]].items()):
+                if user_edge[1]["active"] is True:
+                    traffic_sum += 1
 
             # set traffic attribute
             bs_node[1]["traffic"] = traffic_sum
-            # calculate total throughput for bs
-            bs_node[1]["throughput"] = self.get_throughput(bs_node[1]["capacity"], traffic_sum)
-            # calculate load for bs
-            bs_node[1]["load"] = self.get_load(bs_node[1]["capacity"], traffic_sum)
-            # calculate total dynamic_power for bs
-            bs_node[1]["dynamic_power"] = self.get_transmission_power(
-                bs_node[1]["tx_power"], traffic_sum)
+            # set load attribute
+            bs_node[1]["load"] = traffic_sum / bs_node[1]["antennas"]if traffic_sum > 0 else 0
+            # calculate total power consumption for bs -> call only after traffic and load estimations are done
+            bs_node[1]["total_power"] = self.get_total_power(bs_node[0])
 
-    def update_cell_node_attributes(self):
-        """ update dynamic cell_node attributes depending on active edge and hour (sinr, traffic, rssi)
+    def update_user_node_attributes(self):
+        """ update dynamic user_node attributes depending on active edge and hour (sinr, rssi)
+        not dl_datarate because this value has to be updated separately after other attributes of bs_nodes and 
+        user_nodes were updated
 
         """
 
-        for _, cell_node in enumerate(filter(self.filter_cell_nodes, self.graph.nodes.data())):
-            # update current traffic considering hour
-            load = self.traffic_profile_pd.at[self.hour, cell_node[1]["traffic_profile_id"]]
-            cell_node[1]["traffic"] = load * cell_node[1]["max_traffic"]
-            cell_node[1]["sinr"] = self.get_sinr(cell_node[0])
-            connected_bs = self.get_connected_bs_nodeid(cell_node[0])
-            cell_node[1]["rssi"] = self.get_received_power(
-                cell_node[0], (cell_node[0], connected_bs)) if connected_bs is not None else 0
+        for _, user_node in enumerate(filter(self.filter_user_nodes, self.graph.nodes.data())):
+            user_node[1]["sinr"] = self.get_sinr(user_node[0])
+            connected_bs = self.get_connected_bs_nodeid(user_node[0])
+            user_node[1]["rssi"] = self.get_rssi_cell(
+                user_node[0], (user_node[0], connected_bs)) if connected_bs is not None else 0
+
+            # user_node[1]["dl_datarate"] = self.get_dl_datarate_user(user_node[0])
+
+    def update_user_node_dl_datarate(self):
+        """updates downlink data rate for users -> call after update_user_nodes and update_bs_nodes"""
+        for _, user_node in enumerate(filter(self.filter_user_nodes, self.graph.nodes.data())):
+            user_node[1]["dl_datarate"] = self.get_dl_datarate_user(user_node[0])
 
     def update_edge_attributes(self):
-        """ updates dynamic edge attributes (sinr)
-
-            only call this after edges active attribute was set properly
-            -> active attribute is set via set_edge_active method
+        """ updates dynamic edge attributes (rssi)
         """
         for _, edge in enumerate(self.graph.edges.data()):
-            return
+            edge[2]["rssi"] = self.graph.nodes.data()[edge[1]]["rssi"]
 
     def set_edge_active(self, cell_node_name: str, bs_node_name: str, active: bool):
         """activates or deactivates edge and triggers node attribute updates
@@ -282,14 +272,35 @@ class Son:
 
     ################### network metric helpers ######################
 
-    def get_throughput(self, max_traffic: float, traffic: float):
-        return round(max_traffic / (1 + traffic), 4)
+    def get_dl_datarate_user(self, cell_id: str):
+        """
+        call after bs_nodes and user_nodes were updated
+        """
+        connected_bs = self.get_connected_bs_nodeid(cell_id)
+        if (connected_bs is None):
+            return 0
 
-    def get_load(self, capacity: float, traffic: float):
-        return round(traffic / capacity, 4)
+        channel_bandwidth = self.graph.nodes.data()[connected_bs]["channel_bandwidth"]
+        sinr = self.graph.nodes.data()[cell_id]["sinr"]
+        channel_capacity = channel_bandwidth * math.log(1+sinr, 2)
+        factor = self.graph.nodes.data()[connected_bs]["antennas"] / self.graph.nodes.data()[
+            connected_bs]["traffic"] if self.graph.nodes.data()[connected_bs]["load"] > 1 else 1
 
-    def get_transmission_power(self, receiver_sensitivity: float, traffic: float):
-        return round(receiver_sensitivity * traffic, 4)
+        return channel_capacity * factor
+
+    def get_total_power(self, bs_node_id: str):
+
+        if self.graph.nodes.data()[bs_node_id]["active"] == False:
+            return self.graph.nodes.data()[bs_node_id]["standby_power"]
+
+        fix_power = self.graph.nodes.data()[bs_node_id]["static_power"]
+        antennas = self.graph.nodes.data()[bs_node_id]["traffic"] if self.graph.nodes.data()[
+            bs_node_id]["load"] <= 1 else self.graph.nodes.data()[bs_node_id]["antennas"]
+        transmission_chain_power = self.graph.nodes.data()[bs_node_id]["tx_power"] * antennas
+        encoding_decoding_power = 0
+        total_power = fix_power + transmission_chain_power + encoding_decoding_power
+
+        return round(total_power, 4)
 
     def get_sinr(self, cell_id: str):
 
@@ -306,14 +317,15 @@ class Son:
 
             for _, interfering_cell_id in enumerate(self.graph[bs_in_range_id]):
                 if self.graph[interfering_cell_id][bs_in_range_id]["active"] and interfering_cell_id != cell_id:
-                    interference_signal += self.get_received_power(
+                    interference_signal += self.get_rssi_cell(
                         cell_id, (interfering_cell_id, bs_in_range_id))
 
-        received_signal_power = self.get_received_power(cell_id, (cell_id, connected_bs_id))
+        received_signal_power = self.get_rssi_cell(cell_id, (cell_id, connected_bs_id))
 
+        # TODO clarify whether received_signal can be added to the denominator or not !
         return round(received_signal_power / (interference_signal + received_signal_power), 4)
 
-    def get_received_power(self, cell_id: str, beam: tuple[str, str]):
+    def get_rssi_cell(self, user_id: str, beam: tuple[str, str]):
         """ returns received signal power for cell with given beam (edge)
 
         Args:
@@ -323,15 +335,15 @@ class Son:
             optimal beam to bs into consideration)
         """
         beam_vector = self.get_directional_vec(target_node_id=beam[0], source_node_id=beam[1])
-        optimal_beam_vector = self.get_directional_vec(cell_id, beam[1])
+        optimal_beam_vector = self.get_directional_vec(user_id, beam[1])
         cos_beta = self.vec_cos(beam_vector, optimal_beam_vector)
         if cos_beta <= 0 or cos_beta > 1:
             return 0
         wave_length = self.graph.nodes.data()[beam[1]]["wave_length"]
         transmission_power = self.graph.nodes.data()[beam[1]]["tx_power"]
         distance = self.get_euclidean_distance(
-            (self.graph.nodes.data()[cell_id]["pos_x"],
-             self.graph.nodes.data()[cell_id]["pos_y"]),
+            (self.graph.nodes.data()[user_id]["pos_x"],
+             self.graph.nodes.data()[user_id]["pos_y"]),
             (self.graph.nodes.data()[beam[1]]["pos_x"],
              self.graph.nodes.data()[beam[1]]["pos_y"]))
 
@@ -377,20 +389,16 @@ class Son:
     def filter_bs_nodes(self, node):
         return node[1]["type"] != "cell"
 
-    def filter_cell_nodes(self, node):
+    def filter_user_nodes(self, node):
         return node[1]["type"] == "cell"
 
     def filter_edges_after_cell_name(self, edge, name: str):
         return edge[0] == name
 
-    def sort_cells_after(self, cell_node, cell_order_one: CellOrderOne,
+    def sort_cells_after(self, cell_node,
                          cell_order_two: CellOrderTwo):
 
-        if cell_order_one != CellOrderOne.RANDOM and cell_order_two != CellOrderTwo.RANDOM:
-            return cell_node[1]["traffic"] if cell_order_one == CellOrderOne.LOWEST_TRAFFIC_FIRST else -cell_node[1]["traffic"], self.graph.degree[cell_node[0]] if cell_order_two == CellOrderTwo.LOWEST_DEGREE_FIRST else -self.graph.degree[cell_node[0]]
-        elif cell_order_one != CellOrderOne.RANDOM and cell_order_two == CellOrderTwo.RANDOM:
-            return cell_node[1]["traffic"] if cell_order_one == CellOrderOne.LOWEST_TRAFFIC_FIRST else -cell_node[1]["traffic"]
-        elif cell_order_one == CellOrderOne.RANDOM and cell_order_two != CellOrderTwo.RANDOM:
+        if cell_order_two != CellOrderTwo.RANDOM:
             return self.graph.degree[cell_node[0]] if cell_order_two == CellOrderTwo.LOWEST_DEGREE_FIRST else -self.graph.degree[cell_node[0]]
         else:
             return 0
@@ -405,7 +413,7 @@ class Son:
         load_sum = 0
         count = 0
         for _, bs_node in enumerate(filter(self.filter_active_bs_nodes, self.graph.nodes.data())):
-            load_sum += bs_node[1]["load"]
+            load_sum += (bs_node[1]["traffic"] / bs_node[1]["antennas"])
             count += 1
 
         return round(load_sum / count, 4)
@@ -416,23 +424,23 @@ class Son:
             avg total network overload as float
         """
         overload_sum = 0
-        count = 0
+        traffic_capacity_for_overload_bs_sum = 0
         for _, bs_node in enumerate(filter(self.filter_active_bs_nodes, self.graph.nodes.data())):
-            count += 1
-            if bs_node[1]["load"] > 1:
-                overload_sum += (bs_node[1]["load"] - 1)
+            if bs_node[1]["traffic"] > bs_node[1]["antennas"]:
+                overload_sum += (bs_node[1]["traffic"])
+                traffic_capacity_for_overload_bs_sum += bs_node[1]["antennas"]
 
-        return round(overload_sum / count, 4)
+        return round(overload_sum / traffic_capacity_for_overload_bs_sum, 4)
 
     def get_total_energy_consumption(self):
-        """get total energy consumption of base station, including dynamic and static power consumption
+        """get total energy consumption of base stations, including dynamic and static power consumption
 
         Returns:
             sum of all energy consumptions for all base stations
         """
         energy_consumption = 0
         for _, bs_node in enumerate(filter(self.filter_active_bs_nodes, self.graph.nodes.data())):
-            energy_consumption += bs_node[1]["dynamic_power"] + bs_node[1]["static_power"]
+            energy_consumption += bs_node[1]["total_power"]
 
         return round(energy_consumption, 4)
 
@@ -445,11 +453,40 @@ class Son:
         sinr_sum = 0
         count = 0
         for _, cell_node in enumerate(
-                filter(self.filter_cell_nodes, self.graph.nodes.data())):
+                filter(self.filter_user_nodes, self.graph.nodes.data())):
             sinr_sum += cell_node[1]["sinr"]
             count += 1
-
         return round(sinr_sum/count, 4)
+
+    def get_average_rssi(self):
+        """get average rssi over all cells
+
+        Returns:
+            average rssi over all cells
+        """
+        rssi_sum = 0
+        count = 0
+        for _, cell_node in enumerate(
+                filter(self.filter_user_nodes, self.graph.nodes.data())):
+            rssi_sum += cell_node[1]["rssi"]
+            count += 1
+
+        return round(rssi_sum/count, 4)
+
+    def get_average_dl_datarate(self):
+        """get average download datarate over all cells
+
+        Returns:
+            average download datarate over all cells
+        """
+        dl_datarate_sum = 0
+        count = 0
+        for _, cell_node in enumerate(
+                filter(self.filter_user_nodes, self.graph.nodes.data())):
+            dl_datarate_sum += cell_node[1]["dl_datarate"]
+            count += 1
+
+        return round(dl_datarate_sum/count, 4)
 
     ################################ bin packing methods ################################
 
@@ -462,52 +499,53 @@ class Son:
             open_bin_bs_list = []
             for _, neighbor in enumerate(self.graph[cell_node[0]].items()):
                 # if bs still has capacity -> add to open_bin_bs_list
-                if self.graph.nodes[neighbor[0]]["traffic"] < self.graph.nodes[neighbor[0]][
-                        "capacity"]:
+                if self.graph.nodes[neighbor[0]]["load"] < 1:
                     open_bin_bs_list.append(neighbor[0])
 
-            # find best fitting bs for current cell traffic and sinr
+            # find best fitting bs for current cell traffic and rssi
             if len(open_bin_bs_list) > 0:
 
                 for bs_name in open_bin_bs_list:
-                    free_capacity = self.graph.nodes[bs_name]["capacity"] - (
-                        self.graph.nodes[bs_name]["traffic"] + cell_node[1]["traffic"])
+                    freen_antennas_with_new_user = self.graph.nodes[bs_name]["antennas"] - (
+                        self.graph.nodes[bs_name]["traffic"] + 1)
 
                     if best_fit_capacity is None or (
-                            free_capacity >= 0 and free_capacity < best_fit_capacity):
+                            freen_antennas_with_new_user >= 0 and freen_antennas_with_new_user <
+                            best_fit_capacity):
                         best_fit_bs_name = bs_name
-                        best_fit_capacity = free_capacity
-                        best_fit_sinr = self.graph[cell_node[0]][bs_name]["sinr"]
-                    elif free_capacity >= 0 and free_capacity == best_fit_capacity and self.graph[cell_node[0]][bs_name]["sinr"] > best_fit_sinr:
+                        best_fit_capacity = freen_antennas_with_new_user
+                        best_fit_sinr = self.graph[cell_node[0]][bs_name]["rssi"]
+                    elif freen_antennas_with_new_user >= 0 and freen_antennas_with_new_user == best_fit_capacity and self.graph[cell_node[0]][bs_name]["rssi"] > best_fit_sinr:
                         best_fit_bs_name = bs_name
-                        best_fit_capacity = free_capacity
-                        best_fit_sinr = self.graph[cell_node[0]][bs_name]["sinr"]
+                        best_fit_capacity = freen_antennas_with_new_user
+                        best_fit_sinr = self.graph[cell_node[0]][bs_name]["rssi"]
         # if bs_order is given -> iterate through bs types
         else:
             for bs_type in bs_order:
                 open_bin_bs_list = []
                 for _, neighbor in enumerate(self.graph[cell_node[0]].items()):
                     # if bs still has capacity and is of type bs_type -> add to open_bin_bs_list
-                    if self.graph.nodes[neighbor[0]]["traffic"] < self.graph.nodes[neighbor[0]][
-                            "capacity"] and self.graph.nodes[neighbor[0]]["type"] == bs_type.value:
+                    if self.graph.nodes[neighbor[0]]["load"] < 1 and self.graph.nodes[neighbor[0]][
+                            "type"] == bs_type.value:
                         open_bin_bs_list.append(neighbor[0])
 
-                # find best fitting bs for current cell traffic and sinr
+                # find best fitting bs for current cell traffic and rssi
                 if len(open_bin_bs_list) > 0:
 
                     for bs_name in open_bin_bs_list:
-                        free_capacity = self.graph.nodes[bs_name]["capacity"] - (
-                            self.graph.nodes[bs_name]["traffic"] + cell_node[1]["traffic"])
+                        freen_antennas_with_new_user = self.graph.nodes[bs_name]["antennas"] - (
+                            self.graph.nodes[bs_name]["traffic"] + 1)
 
                         if best_fit_capacity is None or (
-                                free_capacity >= 0 and free_capacity < best_fit_capacity):
+                                freen_antennas_with_new_user >= 0 and freen_antennas_with_new_user <
+                                best_fit_capacity):
                             best_fit_bs_name = bs_name
-                            best_fit_capacity = free_capacity
-                            best_fit_sinr = self.graph[cell_node[0]][bs_name]["sinr"]
-                        elif free_capacity >= 0 and free_capacity == best_fit_capacity and self.graph[cell_node[0]][bs_name]["sinr"] > best_fit_sinr:
+                            best_fit_capacity = freen_antennas_with_new_user
+                            best_fit_sinr = self.graph[cell_node[0]][bs_name]["rssi"]
+                        elif freen_antennas_with_new_user >= 0 and freen_antennas_with_new_user == best_fit_capacity and self.graph[cell_node[0]][bs_name]["rssi"] > best_fit_sinr:
                             best_fit_bs_name = bs_name
-                            best_fit_capacity = free_capacity
-                            best_fit_sinr = self.graph[cell_node[0]][bs_name]["sinr"]
+                            best_fit_capacity = freen_antennas_with_new_user
+                            best_fit_sinr = self.graph[cell_node[0]][bs_name]["rssi"]
 
                     # leave loop if cell is found for desired bs_type
                     if best_fit_bs_name is not None:
@@ -516,18 +554,18 @@ class Son:
         if best_fit_capacity is None or best_fit_capacity < 0:
             current_overload = None
             for _, neighbor in enumerate(self.graph[cell_node[0]].items()):
-                if current_overload is None or self.graph.nodes[neighbor[0]]["capacity"] - self.graph.nodes[neighbor[0]][
+                if current_overload is None or self.graph.nodes[neighbor[0]]["antennas"] - self.graph.nodes[neighbor[0]][
                         "traffic"] > current_overload:
                     current_overload = self.graph.nodes[neighbor[0]
-                                                        ]["capacity"] - self.graph.nodes[neighbor[0]]["traffic"]
+                                                        ]["antennas"] - self.graph.nodes[neighbor[0]]["traffic"]
                     best_fit_bs_name = neighbor[0]
-                    best_fit_sinr = self.graph[cell_node[0]][neighbor[0]]["sinr"]
-                elif self.graph.nodes[neighbor[0]]["capacity"] - self.graph.nodes[neighbor[0]][
-                        "traffic"] == current_overload and self.graph[cell_node[0]][neighbor[0]]["sinr"] > best_fit_sinr:
+                    best_fit_sinr = self.graph[cell_node[0]][neighbor[0]]["rssi"]
+                elif self.graph.nodes[neighbor[0]]["antennas"] - self.graph.nodes[neighbor[0]][
+                        "traffic"] == current_overload and self.graph[cell_node[0]][neighbor[0]]["rssi"] > best_fit_sinr:
                     current_overload = self.graph.nodes[neighbor[0]
-                                                        ]["capacity"] - self.graph.nodes[neighbor[0]]["traffic"]
+                                                        ]["antennas"] - self.graph.nodes[neighbor[0]]["traffic"]
                     best_fit_bs_name = neighbor[0]
-                    best_fit_sinr = self.graph[cell_node[0]][neighbor[0]]["sinr"]
+                    best_fit_sinr = self.graph[cell_node[0]][neighbor[0]]["rssi"]
 
         # activate best-fit edge and update node attributes
         self.set_edge_active(
@@ -543,51 +581,52 @@ class Son:
             open_bin_bs_list = []
             for _, neighbor in enumerate(self.graph[cell_node[0]].items()):
                 # if bs still has capacity -> add to open_bin_bs_list
-                if self.graph.nodes[neighbor[0]]["traffic"] < self.graph.nodes[neighbor[0]][
-                        "capacity"]:
+                if self.graph.nodes[neighbor[0]]["load"] < 1:
                     open_bin_bs_list.append(neighbor[0])
 
             # find best fitting bs for current cell traffic and sinr
             if len(open_bin_bs_list) > 0:
 
                 for bs_name in open_bin_bs_list:
-                    free_capacity = self.graph.nodes[bs_name]["capacity"] - (
-                        self.graph.nodes[bs_name]["traffic"] + cell_node[1]["traffic"])
+                    free_antennas_plus_new_user = self.graph.nodes[bs_name]["antennas"] - (
+                        self.graph.nodes[bs_name]["traffic"] + 1)
                     if worst_fit_capacity is None or (
-                            free_capacity >= 0 and free_capacity > worst_fit_capacity):
+                            free_antennas_plus_new_user >= 0 and free_antennas_plus_new_user >
+                            worst_fit_capacity):
                         worst_fit_bs_name = bs_name
-                        worst_fit_capacity = free_capacity
-                        worst_fit_sinr = self.graph[cell_node[0]][bs_name]["sinr"]
-                    elif free_capacity >= 0 and free_capacity == worst_fit_capacity and self.graph[cell_node[0]][bs_name]["sinr"] > worst_fit_sinr:
+                        worst_fit_capacity = free_antennas_plus_new_user
+                        worst_fit_sinr = self.graph[cell_node[0]][bs_name]["rssi"]
+                    elif free_antennas_plus_new_user >= 0 and free_antennas_plus_new_user == worst_fit_capacity and self.graph[cell_node[0]][bs_name]["rssi"] > worst_fit_sinr:
                         worst_fit_bs_name = bs_name
-                        worst_fit_capacity = free_capacity
-                        worst_fit_sinr = self.graph[cell_node[0]][bs_name]["sinr"]
+                        worst_fit_capacity = free_antennas_plus_new_user
+                        worst_fit_sinr = self.graph[cell_node[0]][bs_name]["rssi"]
         # if bs_order is given -> iterate through bs types
         else:
             for bs_type in bs_order:
                 open_bin_bs_list = []
                 for _, neighbor in enumerate(self.graph[cell_node[0]].items()):
                     # if bs still has capacity and is of type bs_type -> add to open_bin_bs_list
-                    if self.graph.nodes[neighbor[0]]["traffic"] < self.graph.nodes[neighbor[0]][
-                            "capacity"] and self.graph.nodes[neighbor[0]]["type"] == bs_type.value:
+                    if self.graph.nodes[neighbor[0]]["load"] < 1 and self.graph.nodes[neighbor[0]][
+                            "type"] == bs_type.value:
                         open_bin_bs_list.append(neighbor[0])
 
                 # find best fitting bs for current cell traffic and sinr
                 if len(open_bin_bs_list) > 0:
 
                     for bs_name in open_bin_bs_list:
-                        free_capacity = self.graph.nodes[bs_name]["capacity"] - (
-                            self.graph.nodes[bs_name]["traffic"] + cell_node[1]["traffic"])
+                        free_antennas_plus_new_user = self.graph.nodes[bs_name]["antennas"] - (
+                            self.graph.nodes[bs_name]["traffic"] + 1)
 
                         if worst_fit_capacity is None or (
-                                free_capacity >= 0 and free_capacity > worst_fit_capacity):
+                                free_antennas_plus_new_user >= 0 and free_antennas_plus_new_user >
+                                worst_fit_capacity):
                             worst_fit_bs_name = bs_name
-                            worst_fit_capacity = free_capacity
-                            worst_fit_sinr = self.graph[cell_node[0]][bs_name]["sinr"]
-                        elif free_capacity >= 0 and free_capacity == worst_fit_capacity and self.graph[cell_node[0]][bs_name]["sinr"] > worst_fit_sinr:
+                            worst_fit_capacity = free_antennas_plus_new_user
+                            worst_fit_sinr = self.graph[cell_node[0]][bs_name]["rssi"]
+                        elif free_antennas_plus_new_user >= 0 and free_antennas_plus_new_user == worst_fit_capacity and self.graph[cell_node[0]][bs_name]["rssi"] > worst_fit_sinr:
                             worst_fit_bs_name = bs_name
-                            worst_fit_capacity = free_capacity
-                            worst_fit_sinr = self.graph[cell_node[0]][bs_name]["sinr"]
+                            worst_fit_capacity = free_antennas_plus_new_user
+                            worst_fit_sinr = self.graph[cell_node[0]][bs_name]["rssi"]
 
                     # leave loop if cell is found for desired bs_type
                     if worst_fit_bs_name is not None:
@@ -596,18 +635,18 @@ class Son:
         if worst_fit_capacity is None or worst_fit_capacity < 0:
             current_overload = None
             for _, neighbor in enumerate(self.graph[cell_node[0]].items()):
-                if current_overload is None or self.graph.nodes[neighbor[0]]["capacity"] - self.graph.nodes[neighbor[0]][
+                if current_overload is None or self.graph.nodes[neighbor[0]]["antennas"] - self.graph.nodes[neighbor[0]][
                         "traffic"] > current_overload:
                     current_overload = self.graph.nodes[neighbor[0]
-                                                        ]["capacity"] - self.graph.nodes[neighbor[0]]["traffic"]
+                                                        ]["antennas"] - self.graph.nodes[neighbor[0]]["traffic"]
                     worst_fit_bs_name = neighbor[0]
-                    worst_fit_sinr = self.graph[cell_node[0]][neighbor[0]]["sinr"]
-                elif self.graph.nodes[neighbor[0]]["capacity"] - self.graph.nodes[neighbor[0]][
-                        "traffic"] == current_overload and self.graph[cell_node[0]][neighbor[0]]["sinr"] > worst_fit_sinr:
+                    worst_fit_sinr = self.graph[cell_node[0]][neighbor[0]]["rssi"]
+                elif self.graph.nodes[neighbor[0]]["antennas"] - self.graph.nodes[neighbor[0]][
+                        "traffic"] == current_overload and self.graph[cell_node[0]][neighbor[0]]["rssi"] > worst_fit_sinr:
                     current_overload = self.graph.nodes[neighbor[0]
-                                                        ]["capacity"] - self.graph.nodes[neighbor[0]]["traffic"]
+                                                        ]["antennas"] - self.graph.nodes[neighbor[0]]["traffic"]
                     worst_fit_bs_name = neighbor[0]
-                    worst_fit_sinr = self.graph[cell_node[0]][neighbor[0]]["sinr"]
+                    worst_fit_sinr = self.graph[cell_node[0]][neighbor[0]]["rssi"]
 
         # activate best-fit edge and update node attributes
         self.set_edge_active(
@@ -615,17 +654,15 @@ class Son:
             bs_node_name=worst_fit_bs_name, active=True)
 
     def find_activation_profile_bin_packing(
-            self, cell_order_1: CellOrderOne = CellOrderOne.RANDOM,
-            cell_order_2: CellOrderTwo = CellOrderTwo.RANDOM, bs_order: list[BaseStationOrder] |
-            None = None, bin_packing: BinPackingType = BinPackingType.BEST_FIT):
+            self, cell_order_2: CellOrderTwo = CellOrderTwo.RANDOM, bs_order: list
+            [BaseStationOrder] | None = None, bin_packing: BinPackingType = BinPackingType.BEST_FIT):
 
         # deactivate all edges and update all node attributes
         self.set_edges_active(False)
 
         # prepare cell iteration order
-        cell_node_list = list(filter(self.filter_cell_nodes, self.graph.nodes.data()))
-        cell_node_list.sort(key=lambda x: self.sort_cells_after(
-            x, cell_order_one=cell_order_1, cell_order_two=cell_order_2))
+        cell_node_list = list(filter(self.filter_user_nodes, self.graph.nodes.data()))
+        cell_node_list.sort(key=lambda x: self.sort_cells_after(x, cell_order_two=cell_order_2))
 
         # perform bin packing for each cell and activate single edges
         for _, cell_node in enumerate(cell_node_list):
@@ -636,6 +673,23 @@ class Son:
 
     ############### get encodings, apply encodings, save/load encodings ###################
 
+    def get_json_adjacency_graph(self):
+        return json.dumps(json_graph.adjacency.adjacency_data(self.graph))
+
+    def save_json_adjacency_graph_to_file(self, filename: str):
+        with open(filename, "w") as outfile:
+            outfile.write(self.get_json_adjacency_graph())
+
+    def load_graph_from_json_adjacency_string(self, json_string) -> nx.Graph:
+        return json_graph.adjacency.adjacency_graph(json_string)
+
+    def load_graph_from_json_adjacency_file(self, file_name: str) -> nx.Graph:
+        # Opening JSON file
+        with open(file_name, 'r') as openfile:
+            # Reading from json file
+            json_object = json.load(openfile)
+            return self.load_graph_from_json_adjacency_string(json_object)
+
     def get_edge_activation_encoding_from_graph(self):
         """get the current activation profile of the network edges as list decoding
 
@@ -645,7 +699,7 @@ class Son:
         """
         cell_encoding_list: list[str] = []
         for _, cell_node in enumerate(
-                filter(self.filter_cell_nodes, self.graph.nodes.data())):
+                filter(self.filter_user_nodes, self.graph.nodes.data())):
             cell_encoding_str = ""
             for _, edge in enumerate(self.graph[cell_node[0]].items()):
                 if edge[1]["active"]:
@@ -661,25 +715,25 @@ class Son:
         Args:
             encoding (list[str]): activation list of cell edges
         """
-        for cell_node_index, cell_node in enumerate(
-                filter(self.filter_cell_nodes, self.graph.nodes.data())):
-            for edge_index, edge in enumerate(self.graph[cell_node[0]].items()):
-                if encoding[cell_node_index][edge_index] == "1":
-                    self.set_edge_active(cell_node[0], edge[0], True)
+        for user_node_index, user_node in enumerate(
+                filter(self.filter_user_nodes, self.graph.nodes.data())):
+            for edge_index, edge in enumerate(self.graph[user_node[0]].items()):
+                if encoding[user_node_index][edge_index] == "1":
+                    self.set_edge_active(user_node[0], edge[0], True)
                     break
                 else:
-                    self.set_edge_active(cell_node[0], edge[0], False)
+                    self.set_edge_active(user_node[0], edge[0], False)
 
     def save_edge_activation_profile_to_file(
-            self, encoding: list[list[str]],
+            self, encoding: list[list[str]], result_file_name: str,
             result_sheet_name: str):
         df = pd.DataFrame(encoding)
 
-        with pd.ExcelWriter(self.network_filename, mode="a", if_sheet_exists="replace") as writer:  # pylint: disable=abstract-class-instantiated
+        with pd.ExcelWriter(result_file_name, mode="a", if_sheet_exists="replace") as writer:  # pylint: disable=abstract-class-instantiated
             df.to_excel(writer, result_sheet_name, header=False, index=False)
 
-    def get_edge_activation_encoding_from_file(self, result_sheet_name: str):
-        df = pd.read_excel(self.network_filename, result_sheet_name,
+    def get_edge_activation_encoding_from_file(self, result_file_name: str, result_sheet_name: str):
+        df = pd.read_excel(result_file_name, result_sheet_name,
                            dtype=object, header=None, index_col=None)
         encodings: list[list[str]] = df.values.tolist()
         return encodings
@@ -687,24 +741,19 @@ class Son:
     ################ start calculation methods without visualization and with saving the results ############
 
     def start_calculation_bin_packing_save(
-            self, sheet_name: str,
-            cell_order_1: CellOrderOne = CellOrderOne.HIGHEST_TRAFFIC_FIRST,
+            self, result_file_name: str, sheet_name: str,
             cell_order_2: CellOrderTwo = CellOrderTwo.LOWEST_DEGREE_FIRST, bs_order: None |
             list[BaseStationOrder] = None, bin_packing: BinPackingType = BinPackingType.BEST_FIT):
-        """call this to start simulation with desired bin backing settings for 24 hour and saving
-        activation profiles to sheet
-        TODO complete doc
+        """
+        calls bin packing for current network and saves encoding to file 
         """
         result: list[list[str]] = []
-        for i in range(24):
-            # update hour
-            self.update_hour(i+1)
-            self.find_activation_profile_bin_packing(
-                cell_order_1=cell_order_1, cell_order_2=cell_order_2, bs_order=bs_order,
-                bin_packing=bin_packing)
-            result.append(self.get_edge_activation_encoding_from_graph())
 
-        self.save_edge_activation_profile_to_file(result, sheet_name)
+        self.find_activation_profile_bin_packing(cell_order_2=cell_order_2, bs_order=bs_order,
+                                                 bin_packing=bin_packing)
+        result.append(self.get_edge_activation_encoding_from_graph())
+
+        self.save_edge_activation_profile_to_file(result, result_file_name, sheet_name)
 
     ############## visualization methods ####################
 
@@ -715,24 +764,18 @@ class Son:
             pos (dict[str, list[int]]): as dict of pos-list for each node
         """
         pos: dict[str, list[int]] = {}
-        # add all bs_stations positions
-        for index, row in self.bs_staions_pd.iterrows():
-            pos[str(index)] = [row["pos_x"], row["pos_y"]]
 
-        # add all cell positions
-        for index, row in self.cells_pd.iterrows():
-            pos[str(index)] = [row["pos_x"], row["pos_y"]]
+        for _, node in enumerate(self.graph.nodes.data()):
+            pos[str(node[0])] = [node[1]["pos_x"], node[1]["pos_y"]]
         return pos
 
-    def animate_from_encoding(
+    def matplotlib_animate_from_encoding(
             self, i, fig: Figure, pos, activation_matrix: list[list[str]],
             fig_title: str = ""):
         fig.clear()
-        plt.title(str(i+1) + "'s hour" + " - " + fig_title)
+        plt.title(str(i+1) + "'s solution" + " - " + fig_title)
 
-        # update hour
-        self.update_hour(i+1)
-        # apply activation profile -> update measures
+        # apply activation profile -> update network
         self.apply_edge_activation_encoding_to_graph(activation_matrix[i])
 
         node_colors, node_sizes, node_edge_colors, node_alphas = self.get_node_style()
@@ -752,24 +795,26 @@ class Son:
         nx.drawing.nx_pylab.draw_networkx_edges(self.graph, **options_edges)
         nx.drawing.nx_pylab.draw_networkx_nodes(self.graph, **options_nodes)
 
-    def start_animation_result_from_sheet(self, sheet_name: str):
-        """start simulation over 24 hours with visualization
+    def start_matplotlib_animation_result_from_sheet(self, file_name: str, sheet_name: str):
+        """start simulation over pareto front  with visualization
         TODO finish doc
         """
         # load activation profile from sheet_name
-        activation_matrix = self.get_edge_activation_encoding_from_file(
-            sheet_name)
+        activation_matrix = self.get_edge_activation_encoding_from_file(file_name,
+                                                                        sheet_name)
 
         pos = self.get_node_pos()
         fig, _ = plt.subplots(figsize=(10, 6))
 
         anim = animation.FuncAnimation(
-            fig, lambda i: self.animate_from_encoding(
+            fig, lambda i: self.matplotlib_animate_from_encoding(
                 i, fig=fig, pos=pos, activation_matrix=activation_matrix, fig_title=sheet_name),
-            frames=24, interval=1000, repeat=True)
-
-        display(HTML(anim.to_jshtml()))
-        plt.close(fig)
+            frames=len(activation_matrix), interval=1000, repeat=True)
+        # for showing animated plot in jupyter notebook
+        # display(HTML(anim.to_jshtml()))
+        # plt.close(fig)
+        # for showing plot in normal script mode
+        plt.show()
 
     def draw_current_network(self):
         pos = self.get_node_pos()
@@ -790,22 +835,25 @@ class Son:
         }
 
         label_dic = {}
-        for _, cell_node in enumerate(filter(self.filter_cell_nodes, self.graph.nodes.data())):
-            label_dic[cell_node[0]] = cell_node[1]["rssi"]
+        for _, user_node in enumerate(filter(self.filter_user_nodes, self.graph.nodes.data())):
+            label_dic[user_node[0]] = user_node[1]["rssi"]
 
-        pos_label: dict[str, list[int]] = {}
+        for _, bs_node in enumerate(filter(self.filter_bs_nodes, self.graph.nodes.data())):
+            label_dic[bs_node[0]] = str(bs_node[1]["load"]) + "%"
+
+        label_positions: dict[str, list[int]] = {}
 
         for _, pos_item in enumerate(pos.items()):
-            pos_label[str(pos_item[0])] = [pos_item[1][0], pos_item[1][1] + 1]
+            label_positions[str(pos_item[0])] = [pos_item[1][0], pos_item[1][1] + 1]
 
-        plt.title(f"{self.hour}'s hour")
+        plt.title(f"network")
         nx.drawing.nx_pylab.draw_networkx_edges(self.graph, **options_edges)
         nx.drawing.nx_pylab.draw_networkx_nodes(self.graph, **options_nodes)
         nx.drawing.nx_pylab.draw_networkx_labels(
-            self.graph, pos_label, label_dic, font_color="black")
+            self.graph, label_positions, label_dic, font_color="black")
         plt.show()
 
-    def draw_24_hour_profile_results_diagrams(self, result_sheet_name_list: list[str]):
+    def draw_measurement_diagrams(self, result_file_name: str, result_sheet_name_list: list[str]):
 
         _, ax_sinr = plt.subplots(layout="constrained")
         _, ax_load = plt.subplots(layout="constrained")
@@ -819,37 +867,40 @@ class Son:
         avg_load_values_dict: dict[str, list[float]] = {}
 
         for _, sheet_name in enumerate(result_sheet_name_list):
-            # load 24 activation profile for sheet_name
-            activation_profile_24_hour_matrix = self.get_edge_activation_encoding_from_file(
+            # load activation profile for current network layout from file (pareto front solutions)
+            activation_profile_matrix = self.get_edge_activation_encoding_from_file(
+                result_file_name,
                 sheet_name)
 
             overload_list = []
-            energy_list = []
+            total_power_list = []
             avg_load_list = []
             avg_sinr_list = []
+            avg_rssi_list = []
+            avg_dl_datarate_list = []
 
-            for i_hour, current_activation_profile in enumerate(activation_profile_24_hour_matrix):
+            for _, current_activation_profile in enumerate(activation_profile_matrix):
 
-                # update current hour
-                self.update_hour(i_hour + 1)
-                # apply activation profile of current hour for sheet_name
+                # apply activation profile and update network
                 self.apply_edge_activation_encoding_to_graph(current_activation_profile)
                 # append avg_sinr to avg_sinr_list for sheet_name
                 avg_sinr_list.append(self.get_average_sinr())
                 avg_load_list.append(self.get_average_network_load())
                 overload_list.append(self.get_avg_overlad())
-                energy_list.append(self.get_total_energy_consumption())
+                total_power_list.append(self.get_total_energy_consumption())
+                avg_rssi_list.append(self.get_average_rssi())
+                avg_dl_datarate_list.append(self.get_average_dl_datarate())
             # insert avg_sinr_list dict for plotting
             avg_sinr_values_dict[sheet_name] = avg_sinr_list
             overload_values_dict[sheet_name] = overload_list
 
-            energy_values_dict[sheet_name] = energy_list
+            energy_values_dict[sheet_name] = total_power_list
             avg_load_values_dict[sheet_name] = avg_load_list
 
-        x = np.arange(24)  # the label locations
         width = 1/(len(result_sheet_name_list)+1)  # the width of the bars
         multiplier = 0
         for sheet_name, avg_sinr_24_hour_list in avg_sinr_values_dict.items():
+            x = np.arange(1, len(avg_sinr_24_hour_list)+1)
             offset = width * multiplier
             ax_sinr.bar(x + offset, avg_sinr_24_hour_list, width, label=sheet_name)
             ax_energy.bar(x + offset, energy_values_dict[sheet_name], width, label=sheet_name)
@@ -881,34 +932,35 @@ class Son:
 def main():
     son = Son()
 
-    # for testing single hours
-    son.update_hour(9)
+    # son.draw_current_network()
 
-    son.draw_current_network()
-
-    # apply bin bin packing an save 24 hour profiles
     # bestFit_highestTrafficFirst_HighestDegreeFirst_bsOrderNone
     # son.start_calculation_bin_packing_save(
     #     sheet_name="bf_htf_hdf_bsn",
-    #     cell_order_1=CellOrderOne.HIGHEST_TRAFFIC_FIRST,
     #     cell_order_2=CellOrderTwo.HIGHEST_DEGREE_FIRST, bs_order=None,
     #     bin_packing=BinPackingType.BEST_FIT)
 
     # worstFit_highestTrafficFirst_HighestDegreeFirst_bsOrderNone
+
     # son.start_calculation_bin_packing_save(
     #     sheet_name="wf_htf_tdf_bsn",
-    #     cell_order_1=CellOrderOne.HIGHEST_TRAFFIC_FIRST,
     #     cell_order_2=CellOrderTwo.HIGHEST_DEGREE_FIRST, bs_order=None,
     #     bin_packing=BinPackingType.WORST_FIT)
 
-    # draw avg_sinr graphs
-    # son.draw_24_hour_profile_results(
-    #     ["bf_htf_hdf_bsn", "nsga2_l_s_0.5_0.5", "nsga2_l_s_0_1", "nsga2_l_s_1_0"])
+    son.start_matplotlib_animation_result_from_sheet("son_input.xlsx", "wf_htf_tdf_bsn")
+
+    # draw diagrams
+    # son.draw_measurement_diagrams(
+    #     ["wf_htf_tdf_bsn"])
+
+    son.save_json_adjacency_graph_to_file("test.json")
+    son.load_graph_from_json_adjacency_file("test.json")
+    son.draw_current_network()
 
 
-def animate_result(sheet: str):
+def animate_result(file: str,sheet: str):
     son = Son()
-    son.start_animation_result_from_sheet(sheet)
+    son.start_matplotlib_animation_result_from_sheet(file, sheet)
 
 
 if __name__ == "__main__":
