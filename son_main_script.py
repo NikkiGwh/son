@@ -45,7 +45,7 @@ class NodeType(Enum):
 
 
 class Son:
-    def __init__(self, hour=1) -> None:
+    def __init__(self) -> None:
         # read input data
         self.network_filename = "./initial_network.json"
 
@@ -958,7 +958,7 @@ def main():
     son.draw_current_network()
 
 
-def animate_result(file: str,sheet: str):
+def animate_result(file: str, sheet: str):
     son = Son()
     son.start_matplotlib_animation_result_from_sheet(file, sheet)
 

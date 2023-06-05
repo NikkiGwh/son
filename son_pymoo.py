@@ -22,12 +22,14 @@ class ObjectiveEnum(Enum):
     SINR = 2
     OVERLOAD = 3
     POWER_CONSUMPTION = 4
+    RSSI = 5
+    DLRATE = 6
 
 
 class SonProblemElementWise(ElementwiseProblem):
-    def __init__(self, hour, obj_dict: list[ObjectiveEnum]):
+    def __init__(self, obj_dict: list[ObjectiveEnum]):
         # prepare network
-        self.son = Son(hour=hour)
+        self.son = Son()
         self.obj_dict = obj_dict
         n_var = len(list(filter(self.son.filter_user_nodes, self.son.graph.nodes.data())))
 
@@ -63,6 +65,10 @@ class SonProblemElementWise(ElementwiseProblem):
             objectives = np.append(objectives, self.son.get_total_energy_consumption())
         if ObjectiveEnum.SINR in self.obj_dict:
             objectives = np.append(objectives, -self.son.get_average_sinr())
+        if ObjectiveEnum.DLRATE in self.obj_dict:
+            objectives = np.append(objectives, self.son.get_average_dl_datarate())
+        if ObjectiveEnum.RSSI in self.obj_dict:
+            objectives = np.append(objectives, self.son.get_average_rssi())
 
         out["F"] = objectives
 
@@ -164,8 +170,7 @@ picks_list_1_0: list[list[int]] = []
 picks_list_0_1: list[list[int]] = []
 
 for t in range(1):
-    sonProblem = SonProblemElementWise(
-        hour=t+1, obj_dict=[ObjectiveEnum.NETWORK_LOAD, ObjectiveEnum.SINR])
+    sonProblem = SonProblemElementWise(obj_dict=[ObjectiveEnum.NETWORK_LOAD, ObjectiveEnum.SINR])
     results = minimize(sonProblem, sonAlgorithm_NSGA2_1,
                        termination=("n_gen", 300), seed=1, verbose=True)
 
@@ -208,8 +213,7 @@ for t in range(1):
 
 
 # convert list[list[int]] back to list[list[str]] encoding and save to file
-sonProblem = SonProblemElementWise(
-    hour=1, obj_dict=[ObjectiveEnum.NETWORK_LOAD, ObjectiveEnum.SINR])
+sonProblem = SonProblemElementWise(obj_dict=[ObjectiveEnum.NETWORK_LOAD, ObjectiveEnum.SINR])
 
 picks_converteted_1_0: list[list[str]] = []
 picks_converteted_0_1: list[list[str]] = []
