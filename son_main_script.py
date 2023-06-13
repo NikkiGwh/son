@@ -1,3 +1,4 @@
+from xmlrpc.client import boolean
 from matplotlib.figure import Figure
 import networkx as nx
 from pyparsing import with_attribute
@@ -45,28 +46,29 @@ class NodeType(Enum):
 
 
 class Son:
-    def __init__(self) -> None:
-        # read input data
-        self.network_filename = "./initial_network.json"
+    def __init__(self, file_name: str = "") -> None:
 
         # initialize super parameter
         self.min_rssi = 0.8
 
         # initialize network
-        self.graph = self.load_graph_from_json_adjacency_file("initial_network.json")
+        self.graph = nx.Graph()
 
         self.initialize_edges()
         self.update_network_attributes()
+
+        if file_name != "":
+            self.load_graph_from_json_adjacency_file(file_name)
 
     ############ network initialization methods ##########
 
     def initialize_edges(self):
         edge_list_with_attributes: list[tuple[str, str, dict]] = []
+        self.graph.clear_edges()
         # only add edges for cell-bs pairs which hav minimum rssi signal strength
         for _, cell in enumerate(filter(self.filter_user_nodes, self.graph.nodes.data())):
             for _, bs_node in enumerate(
                     filter(self.filter_bs_nodes, self.graph.nodes.data())):
-
                 current_rssi = self.get_rssi_cell(cell[0], (cell[0], bs_node[0]))
                 current_distance = self.get_euclidean_distance(
                     (cell[1]["pos_x"], cell[1]["pos_y"]), (bs_node[1]["pos_x"], bs_node[1]["pos_y"]))
@@ -77,6 +79,7 @@ class Son:
                     attribute_dic["distance"] = current_distance
                     edge_list_with_attributes.append(
                         (cell[0], bs_node[0], attribute_dic))
+                    print(cell[0] + " " + bs_node[0])
 
         self.graph.add_edges_from(edge_list_with_attributes)
 
@@ -244,6 +247,7 @@ class Son:
         """ updates dynamic edge attributes (rssi)
         """
         for _, edge in enumerate(self.graph.edges.data()):
+            print(edge)
             edge[2]["rssi"] = self.graph.nodes.data()[edge[1]]["rssi"]
 
     def set_edge_active(self, cell_node_name: str, bs_node_name: str, active: bool):
@@ -260,6 +264,60 @@ class Son:
 
         # update all node attributes
         self.update_network_attributes()
+
+    def move_node(self, node_id: str, pos: tuple[float, float], update_network=True):
+        self.graph.nodes.data()[node_id]["pos_x"] = round(pos[0], 2)
+        self.graph.nodes.data()[node_id]["pos_y"] = round(pos[1], 2)
+        self.initialize_edges()
+
+        if update_network:
+            self.update_network_attributes()
+
+    def add_bs_node(
+            self, pos: tuple[float, float],
+            type: str, tx_power: str, static_power: float, antennas: int, frequency: float,
+            active: bool, wave_length: float, channel_bandwidth: float, update_network=True):
+
+        i = self.graph.number_of_nodes()
+        node_id = "bs_" + str(i)
+        node_list = list(self.graph.nodes)
+        while node_list.count(node_id) > 0:
+            i += 1
+            node_id = "bs_" + str(i)
+        self.graph.add_node(
+            node_id, pos_x=pos[0],
+            pos_y=pos[1],
+            type=type, tx_power=tx_power, static_power=static_power, antennas=antennas,
+            wave_length=wave_length, channel_bandwidth=channel_bandwidth, frequency=frequency,
+            active=active)
+
+        self.initialize_edges()
+        if update_network:
+            self.update_network_attributes()
+
+    def add_user_node(
+            self, pos: tuple[float, float],
+            noise=0, shadow_component=0, update_network=True):
+        i = self.graph.number_of_nodes()
+        node_id = "cell_" + str(i)
+        node_list = list(self.graph.nodes)
+
+        while node_list.count(node_id) > 0:
+            i += 1
+            node_id = "cell_" + str(i)
+        self.graph.add_node(
+            node_id, pos_x=pos[0],
+            pos_y=pos[1],
+            type="cell", noise=noise, shadow_component=shadow_component)
+        self.initialize_edges()
+        if update_network:
+            self.update_network_attributes()
+
+    def remove_node(self, node_id: str, update_network=True):
+        self.graph.remove_node(node_id)
+        self.initialize_edges()
+        if update_network:
+            self.update_network_attributes()
 
     def set_edges_active(self, active: bool):
         """deactivates or activates all edges and triggers node attribute updates
@@ -683,12 +741,12 @@ class Son:
     def load_graph_from_json_adjacency_string(self, json_string) -> nx.Graph:
         return json_graph.adjacency.adjacency_graph(json_string)
 
-    def load_graph_from_json_adjacency_file(self, file_name: str) -> nx.Graph:
+    def load_graph_from_json_adjacency_file(self, file_name: str):
         # Opening JSON file
         with open(file_name, 'r') as openfile:
             # Reading from json file
             json_object = json.load(openfile)
-            return self.load_graph_from_json_adjacency_string(json_object)
+            self.graph = self.load_graph_from_json_adjacency_string(json_object)
 
     def get_edge_activation_encoding_from_graph(self):
         """get the current activation profile of the network edges as list decoding
@@ -947,19 +1005,19 @@ def main():
     #     cell_order_2=CellOrderTwo.HIGHEST_DEGREE_FIRST, bs_order=None,
     #     bin_packing=BinPackingType.WORST_FIT)
 
-    son.start_matplotlib_animation_result_from_sheet("son_input.xlsx", "wf_htf_tdf_bsn")
+    # son.start_matplotlib_animation_result_from_sheet("son_input.xlsx", "wf_htf_tdf_bsn")
 
     # draw diagrams
     # son.draw_measurement_diagrams(
     #     ["wf_htf_tdf_bsn"])
 
-    son.save_json_adjacency_graph_to_file("test.json")
-    son.load_graph_from_json_adjacency_file("test.json")
+    # son.save_json_adjacency_graph_to_file("test.json")
+    # son.load_graph_from_json_adjacency_file("test.json")
     son.draw_current_network()
 
 
 def animate_result(file: str, sheet: str):
-    son = Son()
+    son = Son(file_name="test.json")
     son.start_matplotlib_animation_result_from_sheet(file, sheet)
 
 
