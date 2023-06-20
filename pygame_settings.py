@@ -1,7 +1,7 @@
-WINDOW_HEIGHT = 800
-WINDOW_WIDTH = 1000
-GAME_HEIGHT = 800
-GAME_WIDTH = 800
+WINDOW_HEIGHT = 900
+WINDOW_WIDTH = 1400
+GAME_HEIGHT = 900
+GAME_WIDTH = 900
 
 
 style = {
@@ -13,7 +13,8 @@ style = {
                 "femto": "yellow",
                 "pico": "lime",
                 "cell": "black",
-                "inactive": "grey"
+                "inactive": "grey",
+                "overload": "red"
             }
         },
         "sizes": {
