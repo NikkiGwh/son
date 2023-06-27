@@ -19,43 +19,43 @@ from pymoo.decomposition.asf import ASF
 
 
 class ObjectiveEnum(Enum):
-    AVG_LOAD = 1
-    AVG_SINR = 2
-    OVERLOAD = 3
-    AVG_POWER_CONSUMPTION = 4
-    AVG_RSSI = 5
-    AVG_DL_RATE = 6
-    ENERGY_EFFICIENCY = 7
+    AVG_LOAD = "AVG_LOAD"
+    AVG_SINR = "AVG_SINR"
+    OVERLOAD = "OVERLOAD"
+    AVG_POWER_CONSUMPTION = "AVG_POWER_CONSUMPTION"
+    AVG_RSSI = "AVG_RSSI"
+    AVG_DL_RATE = "AVG_DL_RATE"
+    ENERGY_EFFICIENCY = "ENERGY_EFFICIENCY"
 
 
 class AlgorithmEnum(Enum):
-    NSGA2 = 1
-    GA = 2
-    NSGA3 = 3
+    NSGA2 = "NSGA2"
+    GA = "GA"
+    NSGA3 = "NSGA3"
 
 
 class CrossoverEnum(Enum):
-    ONE_POINT_CROSSOVER = 1
-    TWO_POINT_CROSSOVERR = 2
-    SBX_CROSSOVER = 3
+    ONE_POINT_CROSSOVER = "ONE_POINT_CROSSOVER"
+    TWO_POINT_CROSSOVERR = "TWO_POINT_CROSSOVERR"
+    SBX_CROSSOVER = "SBX_CROSSOVER"
 
 
 class MutationEnum(Enum):
-    RANDOM_FLIP = 1
-    SMALL_BS_FLIP = 2
-    BIG_BS_FLIP = 3
-    PM_MUTATION = 4
+    RANDOM_FLIP = "RANDOM_FLIP"
+    SMALL_BS_FLIP = "SMALL_BS_FLIP"
+    BIG_BS_FLIP = "BIG_BS_FLIP"
+    PM_MUTATION = "PM_MUTATION"
 
 
 class SamplingEnum(Enum):
-    RANDOM_SAMPLING = 1
-    SMALL_BS_FIRST_SAMPLING = 2
-    BIG_BS_FIRST_SAMPLING = 3
-    HIGH_RSSI_FIRST_SAMPLING = 4
+    RANDOM_SAMPLING = "RANDOM_SAMPLING"
+    SMALL_BS_FIRST_SAMPLING = "SMALL_BS_FIRST_SAMPLING"
+    BIG_BS_FIRST_SAMPLING = "BIG_BS_FIRST_SAMPLING"
+    HIGH_RSSI_FIRST_SAMPLING = "HIGH_RSSI_FIRST_SAMPLING"
 
 
 class SonProblemElementWise(ElementwiseProblem):
-    def __init__(self, obj_dict: list[ObjectiveEnum], son: Son):
+    def __init__(self, obj_dict: list[str], son: Son):
         # prepare network
         self.son = son
         self.obj_dict = obj_dict
@@ -71,6 +71,7 @@ class SonProblemElementWise(ElementwiseProblem):
         super().__init__(n_var=n_var, n_obj=len(obj_dict), xl=np.full_like(xu, 1), xu=xu)
 
     def _evaluate(self, x, out, *args, **kwargs):
+        print("----evaluate start---------")
        # convert list[int] back to list[str] encoding
         x_binary_str_list = []
         for active_edge_cell_pos_index, active_edge_cell_pos in enumerate(x):
@@ -80,35 +81,39 @@ class SonProblemElementWise(ElementwiseProblem):
             x_binary_str_list.append(encoding)
 
          # apply x (activation profile) to update network results
+        print("apply_edge_activation_encoding_to_graph start")
         self.son.apply_edge_activation_encoding_to_graph(x_binary_str_list)
+        print("end")
 
         # prepare objectives
         objectives = np.array([])
 
-        if ObjectiveEnum.AVG_LOAD in self.obj_dict:
+        if ObjectiveEnum.AVG_LOAD.value in self.obj_dict:
             objectives = np.append(objectives, self.son.get_average_network_load())
-        if ObjectiveEnum.OVERLOAD in self.obj_dict:
+        if ObjectiveEnum.OVERLOAD.value in self.obj_dict:
             objectives = np.append(objectives, self.son.get_avg_overlad())
-        if ObjectiveEnum.AVG_POWER_CONSUMPTION in self.obj_dict:
+        if ObjectiveEnum.AVG_POWER_CONSUMPTION.value in self.obj_dict:
             objectives = np.append(objectives, self.son.get_total_energy_consumption())
-        if ObjectiveEnum.AVG_SINR in self.obj_dict:
+        if ObjectiveEnum.AVG_SINR.value in self.obj_dict:
             objectives = np.append(objectives, -self.son.get_average_sinr())
-        if ObjectiveEnum.AVG_DL_RATE in self.obj_dict:
+        if ObjectiveEnum.AVG_DL_RATE.value in self.obj_dict:
             objectives = np.append(objectives, self.son.get_average_dl_datarate())
-        if ObjectiveEnum.AVG_RSSI in self.obj_dict:
+        if ObjectiveEnum.AVG_RSSI.value in self.obj_dict:
             objectives = np.append(objectives, self.son.get_average_rssi())
 
         out["F"] = objectives
+        print("----evaluate end---------")
 
 
 class SonSampling(Sampling):
     def _do(self, problem: SonProblemElementWise, n_samples, **kwargs):
+        print("----sampling start---------")
         X = np.empty((n_samples, problem.n_var), int)
 
         for i in range(n_samples):
             for j in range(problem.n_var):
                 X[i][j] = np.random.randint(problem.xl[j], problem.xu[j]+1)
-
+        print("----sampling end---------")
         return X
 
 
@@ -119,6 +124,7 @@ class SonCrossover(Crossover):
         super().__init__(n_parents=2, n_offsprings=1, prob=0.4)
 
     def _do(self, problem: SonProblemElementWise, X, **kwargs):
+        print("----crossover start---------")
 
         # The input of has the following shape (n_parents, n_matings, n_var)
         # for each mating of n_parents=2 -> n_offsprings=1 offspring is produced
@@ -135,7 +141,7 @@ class SonCrossover(Crossover):
             # take first half from parent_a and rest from parent_b
             off_a = np.append(parent_a[0:int(n_var/2)], parent_b[int(n_var/2):])
             Y[0, k] = off_a
-
+        print("----crossover end---------")
         return Y
 
 
@@ -145,7 +151,7 @@ class SonMutation(Mutation):
         super().__init__()
 
     def _do(self, problem: SonProblemElementWise, X, **kwargs):
-
+        print("----mutation start---------")
         # for each individual
         for k, individual in enumerate(X):
             r = np.random.random()
@@ -155,6 +161,8 @@ class SonMutation(Mutation):
                 X[k][random_index] = np.random.randint(
                     problem.xl[random_index],
                     problem.xu[random_index] + 1)
+
+        print("----mutation end---------")
         return X
 
 
@@ -173,12 +181,12 @@ def start_optimization(
         n_offsprings: int,
         n_generations: int,
         termination: str,
-        sampling: SamplingEnum,
-        crossover: CrossoverEnum,
-        mutation: MutationEnum,
+        sampling: str,
+        crossover: str,
+        mutation: str,
         eliminate_duplicates: bool,
-        objectives: list[ObjectiveEnum],
-        algorithm: AlgorithmEnum,
+        objectives: list[str],
+        algorithm: str,
         son_obj: Son,
         file_name: str):
 
@@ -188,25 +196,25 @@ def start_optimization(
     crossoverConfig = None
 
     # sampling
-    if (sampling == SamplingEnum.RANDOM_SAMPLING):
+    if (sampling == SamplingEnum.RANDOM_SAMPLING.value):
         samplingConfig = IntegerRandomSampling()
     else:
         samplingConfig = SonSampling()
 
     # crossover
-    if (crossover == CrossoverEnum.SBX_CROSSOVER):
+    if (crossover == CrossoverEnum.SBX_CROSSOVER.value):
         crossoverConfig = SBX(prob=1.0, eta=3, vtype=float, repair=RoundingRepair())
     else:
         crossoverConfig = SonCrossover()
 
     # mutation
-    if (mutation == MutationEnum.PM_MUTATION):
+    if (mutation == MutationEnum.PM_MUTATION.value):
         mutationConfig = PM(prob=1.0, eta=3, vtype=float, repair=RoundingRepair())
     else:
         mutationConfig = SonMutation()
 
     # algorithm config
-    if (algorithm == AlgorithmEnum.GA):
+    if (algorithm == AlgorithmEnum.GA.value):
         pymooAlgorithm = GA(pop_size=pop_size,
                             sampling=samplingConfig,
                             crossover=crossoverConfig,
@@ -216,6 +224,7 @@ def start_optimization(
                             n_generations=n_generations
                             )
     else:
+        print("start with nsga2")
         pymooAlgorithm = NSGA2(pop_size=pop_size,
                                n_offsprings=n_offsprings,
                                sampling=samplingConfig,
@@ -249,7 +258,7 @@ def start_optimization(
 
     # save encoding to excel
     sonProblem.son.save_edge_activation_profile_to_file(
-        converted_encoding, result_file_name=file_name + "_result_encoding.xlsx",
+        converted_encoding, result_file_name=file_name + "_encoding.xlsx",
         result_sheet_name="encoding")
     # save all result individuums as json
     for i, individuum in enumerate(converted_encoding):
@@ -368,8 +377,9 @@ def start_optimization(
 
 
 if __name__ == "__main__":
-    son = Son("test.json")
+    son = Son(adjacencies_file_name="datastore/smallnetwork/smallnetwork_adjacencies.json",
+              parameter_config_file_name="datastore/smallnetwork/smallnetwork_network_config.json")
     start_optimization(
-        100, 20, 10, "", SamplingEnum.SMALL_BS_FIRST_SAMPLING, CrossoverEnum.ONE_POINT_CROSSOVER,
-        MutationEnum.RANDOM_FLIP, True, [ObjectiveEnum.AVG_SINR, ObjectiveEnum.AVG_LOAD],
-        AlgorithmEnum.NSGA2, son, "FirstResult")
+        100, 20, 10, "", SamplingEnum.SMALL_BS_FIRST_SAMPLING.value, CrossoverEnum.ONE_POINT_CROSSOVER.value,
+        MutationEnum.RANDOM_FLIP.value, True, [ObjectiveEnum.AVG_SINR.value, ObjectiveEnum.AVG_LOAD.value],
+        AlgorithmEnum.NSGA2.value, son, "datastore/smallnetwork/algorithm_config_1/ind")

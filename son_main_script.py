@@ -864,7 +864,7 @@ class Son:
             result_sheet_name: str):
         df = pd.DataFrame(encoding)
 
-        with pd.ExcelWriter(result_file_name, mode="w", if_sheet_exists="replace") as writer:  # pylint: disable=abstract-class-instantiated
+        with pd.ExcelWriter(result_file_name, mode="w") as writer:  # pylint: disable=abstract-class-instantiated
             df.to_excel(writer, result_sheet_name, header=False, index=False)
 
     def get_edge_activation_encoding_from_file(self, result_file_name: str, result_sheet_name: str):
