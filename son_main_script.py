@@ -51,7 +51,7 @@ default_node_params = {
         "tx_power": 20,
         "static_power": 4.0,
         "standby_power": 0,
-        "antennas": 4,
+        "antennas": 8,
         "frequency": 0,
         "wave_length": 80,
         "channel_bandwidth": 10
@@ -61,7 +61,7 @@ default_node_params = {
         "tx_power": 1,
         "static_power": 1.5,
         "standby_power": 0,
-        "antennas": 1,
+        "antennas": 3,
         "frequency": 0,
         "wave_length": 80,
         "channel_bandwidth": 10
@@ -95,7 +95,7 @@ default_node_params = {
 
 
 class Son:
-    def __init__(self, file_name: str = "") -> None:
+    def __init__(self, adjacencies_file_name: str = "", parameter_config_file_name: str = "") -> None:
 
         # initialize super parameter
         self.min_rssi = 0.8
@@ -106,8 +106,11 @@ class Son:
         self.initialize_edges()
         self.update_network_attributes()
 
-        if file_name != "":
-            self.load_graph_from_json_adjacency_file(file_name)
+        if parameter_config_file_name != "":
+            self.load_parameter_config_from_json_file(parameter_config_file_name)
+        if adjacencies_file_name != "":
+            self.load_graph_from_json_adjacency_file(
+                adjacencies_file_name, keep_activation_profile=True)
 
     ############ network initialization methods ##########
 
@@ -366,7 +369,8 @@ class Son:
         if update_network:
             self.update_network_attributes()
 
-    def apply_network_node_attributes(self, param_list: dict[str, dict[str, float]]):
+    def apply_network_node_attributes(
+            self, param_list: dict[str, dict[str, float]]):
         self.network_node_params = param_list
         self.initialize_edges()
         self.update_network_attributes()
@@ -524,7 +528,8 @@ class Son:
         count = 0
         for _, bs_node in enumerate(filter(self.filter_active_bs_nodes, self.graph.nodes.data())):
             # load_sum += (bs_node[1]["traffic"] / bs_node[1]["antennas"])
-            load_sum += (bs_node[1]["traffic"] / self.network_node_params[bs_node[0]]["antennas"])
+            load_sum += (bs_node[1]
+                         ["traffic"] / self.network_node_params[bs_node[1]["type"]]["antennas"])
             count += 1
 
         return round(load_sum / count, 4)
@@ -537,9 +542,10 @@ class Son:
         overload_sum = 0
         traffic_capacity_for_overload_bs_sum = 0
         for _, bs_node in enumerate(filter(self.filter_active_bs_nodes, self.graph.nodes.data())):
-            if bs_node[1]["traffic"] > self.network_node_params[bs_node[0]]["antennas"]:
+            if bs_node[1]["traffic"] > self.network_node_params[bs_node[1]["type"]]["antennas"]:
                 overload_sum += (bs_node[1]["traffic"])
-                traffic_capacity_for_overload_bs_sum += self.network_node_params[bs_node[0]][
+                traffic_capacity_for_overload_bs_sum += self.network_node_params[bs_node[1]
+                                                                                 ["type"]][
                     "antennas"]
 
         return round(overload_sum / traffic_capacity_for_overload_bs_sum, 4)
@@ -794,18 +800,30 @@ class Son:
         return json.dumps(json_graph.adjacency.adjacency_data(self.graph))
 
     def save_json_adjacency_graph_to_file(self, filename: str):
-        with open(filename, "w") as outfile:
+        with open(filename, "w+", encoding="utf-8") as outfile:
             outfile.write(self.get_json_adjacency_graph())
 
-    def load_graph_from_json_adjacency_string(self, json_string) -> nx.Graph:
+    def get_graph_from_json_adjacency_string(self, json_string) -> nx.Graph:
         return json_graph.adjacency.adjacency_graph(json_string)
 
-    def load_graph_from_json_adjacency_file(self, file_name: str):
+    def load_graph_from_json_adjacency_file(
+            self, file_name: str, keep_activation_profile: bool = False):
         # Opening JSON file
-        with open(file_name, 'r') as openfile:
+        with open(file_name, 'r', encoding="utf-8") as openfile:
             # Reading from json file
             json_object = json.load(openfile)
-            self.graph = self.load_graph_from_json_adjacency_string(json_object)
+            self.graph = self.get_graph_from_json_adjacency_string(json_object)
+            if keep_activation_profile is False:
+                self.initialize_edges()
+            self.update_network_attributes()
+
+    def load_parameter_config_from_json_file(
+            self, file_name: str):
+        # Opening JSON file
+        with open(file_name, 'r', encoding="utf-8") as openfile:
+            # Reading from json file
+            json_object = json.load(openfile)
+            self.apply_network_node_attributes(json_object)
 
     def get_edge_activation_encoding_from_graph(self):
         """get the current activation profile of the network edges as list decoding
@@ -846,7 +864,7 @@ class Son:
             result_sheet_name: str):
         df = pd.DataFrame(encoding)
 
-        with pd.ExcelWriter(result_file_name, mode="a", if_sheet_exists="replace") as writer:  # pylint: disable=abstract-class-instantiated
+        with pd.ExcelWriter(result_file_name, mode="w", if_sheet_exists="replace") as writer:  # pylint: disable=abstract-class-instantiated
             df.to_excel(writer, result_sheet_name, header=False, index=False)
 
     def get_edge_activation_encoding_from_file(self, result_file_name: str, result_sheet_name: str):
@@ -1047,7 +1065,7 @@ class Son:
 ################# script main #######################
 
 def main():
-    son = Son(file_name="test.json")
+    son = Son(adjacencies_file_name="test.json")
     # bestFit_highestTrafficFirst_HighestDegreeFirst_bsOrderNone
     # son.start_calculation_bin_packing_save(
     #     sheet_name="bf_htf_hdf_bsn",
@@ -1077,7 +1095,7 @@ def main():
 
 
 def animate_result(file: str, sheet: str):
-    son = Son(file_name="test.json")
+    son = Son(adjacencies_file_name="test.json")
     son.start_matplotlib_animation_result_from_sheet(file, sheet)
 
 

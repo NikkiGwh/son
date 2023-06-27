@@ -1,3 +1,4 @@
+from fileinput import filename
 import numpy as np
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.core.problem import ElementwiseProblem
@@ -18,18 +19,45 @@ from pymoo.decomposition.asf import ASF
 
 
 class ObjectiveEnum(Enum):
-    NETWORK_LOAD = 1
-    SINR = 2
+    AVG_LOAD = 1
+    AVG_SINR = 2
     OVERLOAD = 3
-    POWER_CONSUMPTION = 4
-    RSSI = 5
-    DLRATE = 6
+    AVG_POWER_CONSUMPTION = 4
+    AVG_RSSI = 5
+    AVG_DL_RATE = 6
+    ENERGY_EFFICIENCY = 7
+
+
+class AlgorithmEnum(Enum):
+    NSGA2 = 1
+    GA = 2
+    NSGA3 = 3
+
+
+class CrossoverEnum(Enum):
+    ONE_POINT_CROSSOVER = 1
+    TWO_POINT_CROSSOVERR = 2
+    SBX_CROSSOVER = 3
+
+
+class MutationEnum(Enum):
+    RANDOM_FLIP = 1
+    SMALL_BS_FLIP = 2
+    BIG_BS_FLIP = 3
+    PM_MUTATION = 4
+
+
+class SamplingEnum(Enum):
+    RANDOM_SAMPLING = 1
+    SMALL_BS_FIRST_SAMPLING = 2
+    BIG_BS_FIRST_SAMPLING = 3
+    HIGH_RSSI_FIRST_SAMPLING = 4
 
 
 class SonProblemElementWise(ElementwiseProblem):
-    def __init__(self, obj_dict: list[ObjectiveEnum]):
+    def __init__(self, obj_dict: list[ObjectiveEnum], son: Son):
         # prepare network
-        self.son = Son()
+        self.son = son
         self.obj_dict = obj_dict
         n_var = len(list(filter(self.son.filter_user_nodes, self.son.graph.nodes.data())))
 
@@ -57,17 +85,17 @@ class SonProblemElementWise(ElementwiseProblem):
         # prepare objectives
         objectives = np.array([])
 
-        if ObjectiveEnum.NETWORK_LOAD in self.obj_dict:
+        if ObjectiveEnum.AVG_LOAD in self.obj_dict:
             objectives = np.append(objectives, self.son.get_average_network_load())
         if ObjectiveEnum.OVERLOAD in self.obj_dict:
             objectives = np.append(objectives, self.son.get_avg_overlad())
-        if ObjectiveEnum.POWER_CONSUMPTION in self.obj_dict:
+        if ObjectiveEnum.AVG_POWER_CONSUMPTION in self.obj_dict:
             objectives = np.append(objectives, self.son.get_total_energy_consumption())
-        if ObjectiveEnum.SINR in self.obj_dict:
+        if ObjectiveEnum.AVG_SINR in self.obj_dict:
             objectives = np.append(objectives, -self.son.get_average_sinr())
-        if ObjectiveEnum.DLRATE in self.obj_dict:
+        if ObjectiveEnum.AVG_DL_RATE in self.obj_dict:
             objectives = np.append(objectives, self.son.get_average_dl_datarate())
-        if ObjectiveEnum.RSSI in self.obj_dict:
+        if ObjectiveEnum.AVG_RSSI in self.obj_dict:
             objectives = np.append(objectives, self.son.get_average_rssi())
 
         out["F"] = objectives
@@ -137,105 +165,211 @@ class SonDublicateElimination(ElementwiseDuplicateElimination):
 
 
 ################################ main ###################
+# TODO add weigthing parameters for objectives with augumented scalarization function
+# TODO add parameters for different termination criteria
 
-sonAlgorithm_NSGA2_1 = NSGA2(pop_size=100,
-                             n_offsprings=20,
-                             sampling=SonSampling(),
-                             crossover=SonCrossover(),
-                             mutation=SonMutation(),
-                             eliminate_duplicates=SonDublicateElimination()
-                             )
+def start_optimization(
+        pop_size: int,
+        n_offsprings: int,
+        n_generations: int,
+        termination: str,
+        sampling: SamplingEnum,
+        crossover: CrossoverEnum,
+        mutation: MutationEnum,
+        eliminate_duplicates: bool,
+        objectives: list[ObjectiveEnum],
+        algorithm: AlgorithmEnum,
+        son_obj: Son,
+        file_name: str):
+
+    pymooAlgorithm = None
+    samplingConfig = None
+    mutationConfig = None
+    crossoverConfig = None
+
+    # sampling
+    if (sampling == SamplingEnum.RANDOM_SAMPLING):
+        samplingConfig = IntegerRandomSampling()
+    else:
+        samplingConfig = SonSampling()
+
+    # crossover
+    if (crossover == CrossoverEnum.SBX_CROSSOVER):
+        crossoverConfig = SBX(prob=1.0, eta=3, vtype=float, repair=RoundingRepair())
+    else:
+        crossoverConfig = SonCrossover()
+
+    # mutation
+    if (mutation == MutationEnum.PM_MUTATION):
+        mutationConfig = PM(prob=1.0, eta=3, vtype=float, repair=RoundingRepair())
+    else:
+        mutationConfig = SonMutation()
+
+    # algorithm config
+    if (algorithm == AlgorithmEnum.GA):
+        pymooAlgorithm = GA(pop_size=pop_size,
+                            sampling=samplingConfig,
+                            crossover=crossoverConfig,
+                            mutation=mutationConfig,
+                            n_offsprings=n_offsprings,
+                            eliminate_duplicates=eliminate_duplicates,
+                            n_generations=n_generations
+                            )
+    else:
+        pymooAlgorithm = NSGA2(pop_size=pop_size,
+                               n_offsprings=n_offsprings,
+                               sampling=samplingConfig,
+                               crossover=crossoverConfig,
+                               mutation=mutationConfig,
+                               eliminate_duplicates=eliminate_duplicates,
+                               n_generations=n_generations
+                               )
+
+    sonProblem = SonProblemElementWise(obj_dict=objectives, son=son_obj)
+    # start computatoin with  termination criteria
+
+    result = minimize(sonProblem, pymooAlgorithm,
+                      termination=("n_gen", n_generations), seed=1, verbose=True)
+
+    # convert
+
+    decisionSpace = result.X
+    objectiveSpace = result.F
+    print(objectiveSpace)
+    print(decisionSpace)
+    converted_encoding: list[list[str]] = []
+    for _, x in enumerate(decisionSpace):
+        x_binary_str_list: list[str] = []
+        for active_edge_cell_pos_index, active_edge_cell_pos in enumerate(x):
+            encoding = ""
+            for i in range(int(sonProblem.xu[active_edge_cell_pos_index])):
+                encoding += "1" if i+1 == active_edge_cell_pos else "0"
+            x_binary_str_list.append(encoding)
+        converted_encoding.append(x_binary_str_list)
+
+    # save encoding to excel
+    sonProblem.son.save_edge_activation_profile_to_file(
+        converted_encoding, result_file_name=file_name + "_result_encoding.xlsx",
+        result_sheet_name="encoding")
+    # save all result individuums as json
+    for i, individuum in enumerate(converted_encoding):
+        sonProblem.son.apply_edge_activation_encoding_to_graph(individuum)
+        sonProblem.son.save_json_adjacency_graph_to_file(
+            filename=file_name + "_result_" + str(i + 1) + ".json")
 
 
-sonAlgorithm_NSGA2_2 = NSGA2(pop_size=100,
-                             sampling=IntegerRandomSampling(),
-                             crossover=SBX(prob=1.0, eta=3, vtype=float, repair=RoundingRepair()),
-                             mutation=PM(prob=1.0, eta=3, vtype=float, repair=RoundingRepair()),
-                             eliminate_duplicates=True,
-                             )
+# sonAlgorithm_NSGA2_1 = NSGA2(pop_size=100,
+#                              n_offsprings=20,
+#                              sampling=SonSampling(),
+#                              crossover=SonCrossover(),
+#                              mutation=SonMutation(),
+#                              eliminate_duplicates=SonDublicateElimination()
+#                              )
 
-sonAlgorithm_GA = GA(pop_size=100,
-                     sampling=IntegerRandomSampling(),
-                     crossover=SBX(prob=1.0, eta=3, vtype=float, repair=RoundingRepair()),
-                     mutation=PM(prob=1.0, eta=3, vtype=float, repair=RoundingRepair()),
-                     eliminate_duplicates=True,)
+
+# sonAlgorithm_NSGA2_2 = NSGA2(pop_size=100,
+#                              sampling=IntegerRandomSampling(),
+#                              crossover=SBX(prob=1.0, eta=3, vtype=float, repair=RoundingRepair()),
+#                              mutation=PM(prob=1.0, eta=3, vtype=float, repair=RoundingRepair()),
+#                              eliminate_duplicates=True,
+#                              )
+
+# sonAlgorithm_GA = GA(pop_size=100,
+#                      sampling=IntegerRandomSampling(),
+#                      crossover=SBX(prob=1.0, eta=3, vtype=float, repair=RoundingRepair()),
+#                      mutation=PM(prob=1.0, eta=3, vtype=float, repair=RoundingRepair()),
+#                      eliminate_duplicates=True,)
+
 # Augmented Scalarization Function (ASF)
-decomp = ASF()
+
+# decomp = ASF()
 
 # order or weights, len must match number of objectives => [load, overload, power_consumption, sinr]
-weights_1_0 = np.array([0.5, 0.5])
-weights_0_1 = np.array([0, 1])
 
-picks_list_1_0: list[list[int]] = []
-picks_list_0_1: list[list[int]] = []
+# weights_1_0 = np.array([0.5, 0.5])
+# weights_0_1 = np.array([0, 1])
 
-for t in range(1):
-    sonProblem = SonProblemElementWise(obj_dict=[ObjectiveEnum.NETWORK_LOAD, ObjectiveEnum.SINR])
-    results = minimize(sonProblem, sonAlgorithm_NSGA2_1,
-                       termination=("n_gen", 300), seed=1, verbose=True)
+# picks_list_1_0: list[list[int]] = []
+# picks_list_0_1: list[list[int]] = []
 
-    # select one result for current hour and push in result array
-    decisionSpace = results.X
-    objectiveSpace = results.F
-    # print(objectiveSpace)
-    # print(decisionSpace)
 
-    # normalize objective space
-    ideal = objectiveSpace.min(axis=0)
-    nadir = objectiveSpace.max(axis=0)
+# sonProblem = SonProblemElementWise(obj_dict=[ObjectiveEnum.AVG_LOAD, ObjectiveEnum.AVG_SINR])
+# results = minimize(sonProblem, sonAlgorithm_NSGA2_1,
+#                    termination=("n_gen", 300), seed=1, verbose=True)
 
-    nF = (objectiveSpace - ideal) / (nadir - ideal)
+# select one result for current hour and push in result array
 
-    index_objectiveSpace_1_0 = decomp.do(nF, 1/weights_1_0).argmin()
-    index_objectiveSpace_0_1 = decomp.do(nF, 1/weights_0_1).argmin()
+# decisionSpace = results.X
+# objectiveSpace = results.F
+# print(objectiveSpace)
+# print(decisionSpace)
 
-    picks_list_1_0.append(decisionSpace[index_objectiveSpace_1_0])
-    picks_list_0_1.append(decisionSpace[index_objectiveSpace_0_1])
+# normalize objective space
 
-    plt.figure(figsize=(7, 5))
-    plt.scatter(nF[:, 0], nF[:, 1], s=30, facecolors='none', edgecolors='blue')
-    plt.scatter(
-        nF[index_objectiveSpace_1_0, 0],
-        nF[index_objectiveSpace_1_0, 1],
-        marker="x", color="red", s=200)
-    plt.title("Objective Space normalized")
+# ideal = objectiveSpace.min(axis=0)
+# nadir = objectiveSpace.max(axis=0)
 
-    plt.figure(figsize=(7, 5))
-    plt.scatter(objectiveSpace[:, 0], objectiveSpace[:, 1],
-                s=30, facecolors='none', edgecolors='blue')
-    plt.scatter(
-        objectiveSpace[index_objectiveSpace_1_0, 0],
-        objectiveSpace[index_objectiveSpace_1_0, 1],
-        marker="x", color="red", s=200)
-    plt.title("Objective Space")
+# nF = (objectiveSpace - ideal) / (nadir - ideal)
 
-    plt.show()
+# index_objectiveSpace_1_0 = decomp.do(nF, 1/weights_1_0).argmin()
+# index_objectiveSpace_0_1 = decomp.do(nF, 1/weights_0_1).argmin()
+
+# picks_list_1_0.append(decisionSpace[index_objectiveSpace_1_0])
+# picks_list_0_1.append(decisionSpace[index_objectiveSpace_0_1])
+
+# plt.figure(figsize=(7, 5))
+# plt.scatter(nF[:, 0], nF[:, 1], s=30, facecolors='none', edgecolors='blue')
+# plt.scatter(
+#     nF[index_objectiveSpace_1_0, 0],
+#     nF[index_objectiveSpace_1_0, 1],
+#     marker="x", color="red", s=200)
+# plt.title("Objective Space normalized")
+
+# plt.figure(figsize=(7, 5))
+# plt.scatter(objectiveSpace[:, 0], objectiveSpace[:, 1],
+#             s=30, facecolors='none', edgecolors='blue')
+# plt.scatter(
+#     objectiveSpace[index_objectiveSpace_1_0, 0],
+#     objectiveSpace[index_objectiveSpace_1_0, 1],
+#     marker="x", color="red", s=200)
+# plt.title("Objective Space")
+
+# plt.show()
 
 
 # convert list[list[int]] back to list[list[str]] encoding and save to file
-sonProblem = SonProblemElementWise(obj_dict=[ObjectiveEnum.NETWORK_LOAD, ObjectiveEnum.SINR])
 
-picks_converteted_1_0: list[list[str]] = []
-picks_converteted_0_1: list[list[str]] = []
-for _, x in enumerate(picks_list_1_0):
-    x_binary_str_list: list[str] = []
-    for active_edge_cell_pos_index, active_edge_cell_pos in enumerate(x):
-        encoding = ""
-        for i in range(int(sonProblem.xu[active_edge_cell_pos_index])):
-            encoding += "1" if i+1 == active_edge_cell_pos else "0"
-        x_binary_str_list.append(encoding)
-    picks_converteted_1_0.append(x_binary_str_list)
+# sonProblem = SonProblemElementWise(obj_dict=[ObjectiveEnum.AVG_LOAD, ObjectiveEnum.AVG_SINR])
 
-for _, x in enumerate(picks_list_0_1):
-    x_binary_str_list: list[str] = []
-    for active_edge_cell_pos_index, active_edge_cell_pos in enumerate(x):
-        encoding = ""
-        for i in range(int(sonProblem.xu[active_edge_cell_pos_index])):
-            encoding += "1" if i+1 == active_edge_cell_pos else "0"
-        x_binary_str_list.append(encoding)
-    picks_converteted_0_1.append(x_binary_str_list)
+# picks_converteted_1_0: list[list[str]] = []
+# picks_converteted_0_1: list[list[str]] = []
+# for _, x in enumerate(picks_list_1_0):
+#     x_binary_str_list: list[str] = []
+#     for active_edge_cell_pos_index, active_edge_cell_pos in enumerate(x):
+#         encoding = ""
+#         for i in range(int(sonProblem.xu[active_edge_cell_pos_index])):
+#             encoding += "1" if i+1 == active_edge_cell_pos else "0"
+#         x_binary_str_list.append(encoding)
+#     picks_converteted_1_0.append(x_binary_str_list)
+
+# for _, x in enumerate(picks_list_0_1):
+#     x_binary_str_list: list[str] = []
+#     for active_edge_cell_pos_index, active_edge_cell_pos in enumerate(x):
+#         encoding = ""
+#         for i in range(int(sonProblem.xu[active_edge_cell_pos_index])):
+#             encoding += "1" if i+1 == active_edge_cell_pos else "0"
+#         x_binary_str_list.append(encoding)
+#     picks_converteted_0_1.append(x_binary_str_list)
 
 
-# save result to file
+# # save result to file
 # sonProblem.son.save_edge_activation_profile_to_file(picks_converteted_1_0, "nsga2_1_0")
 # sonProblem.son.save_edge_activation_profile_to_file(picks_converteted_0_1, "nsga2_0_1")
+
+
+if __name__ == "__main__":
+    son = Son("test.json")
+    start_optimization(
+        100, 20, 10, "", SamplingEnum.SMALL_BS_FIRST_SAMPLING, CrossoverEnum.ONE_POINT_CROSSOVER,
+        MutationEnum.RANDOM_FLIP, True, [ObjectiveEnum.AVG_SINR, ObjectiveEnum.AVG_LOAD],
+        AlgorithmEnum.NSGA2, son, "FirstResult")
