@@ -233,12 +233,12 @@ def start_optimization(
     result = minimize(sonProblem, pymooAlgorithm,
                       termination=("n_gen", n_generations), seed=1, verbose=True)
 
-    # convert
-
     decisionSpace = result.X
     objectiveSpace = result.F
     print(objectiveSpace)
     print(decisionSpace)
+
+    # convert encoding (decisionspace results) back to  binary encoding
     converted_encoding: list[list[str]] = []
     for _, x in enumerate(decisionSpace):
         x_binary_str_list: list[str] = []
@@ -258,29 +258,6 @@ def start_optimization(
         sonProblem.son.apply_edge_activation_encoding_to_graph(individuum)
         sonProblem.son.save_json_adjacency_graph_to_file(
             filename=file_name + "_result_" + str(i + 1) + ".json")
-
-
-# sonAlgorithm_NSGA2_1 = NSGA2(pop_size=100,
-#                              n_offsprings=20,
-#                              sampling=SonSampling(),
-#                              crossover=SonCrossover(),
-#                              mutation=SonMutation(),
-#                              eliminate_duplicates=SonDublicateElimination()
-#                              )
-
-
-# sonAlgorithm_NSGA2_2 = NSGA2(pop_size=100,
-#                              sampling=IntegerRandomSampling(),
-#                              crossover=SBX(prob=1.0, eta=3, vtype=float, repair=RoundingRepair()),
-#                              mutation=PM(prob=1.0, eta=3, vtype=float, repair=RoundingRepair()),
-#                              eliminate_duplicates=True,
-#                              )
-
-# sonAlgorithm_GA = GA(pop_size=100,
-#                      sampling=IntegerRandomSampling(),
-#                      crossover=SBX(prob=1.0, eta=3, vtype=float, repair=RoundingRepair()),
-#                      mutation=PM(prob=1.0, eta=3, vtype=float, repair=RoundingRepair()),
-#                      eliminate_duplicates=True,)
 
 # Augmented Scalarization Function (ASF)
 
@@ -337,36 +314,6 @@ def start_optimization(
 # plt.title("Objective Space")
 
 # plt.show()
-
-
-# convert list[list[int]] back to list[list[str]] encoding and save to file
-
-# sonProblem = SonProblemElementWise(obj_dict=[ObjectiveEnum.AVG_LOAD, ObjectiveEnum.AVG_SINR])
-
-# picks_converteted_1_0: list[list[str]] = []
-# picks_converteted_0_1: list[list[str]] = []
-# for _, x in enumerate(picks_list_1_0):
-#     x_binary_str_list: list[str] = []
-#     for active_edge_cell_pos_index, active_edge_cell_pos in enumerate(x):
-#         encoding = ""
-#         for i in range(int(sonProblem.xu[active_edge_cell_pos_index])):
-#             encoding += "1" if i+1 == active_edge_cell_pos else "0"
-#         x_binary_str_list.append(encoding)
-#     picks_converteted_1_0.append(x_binary_str_list)
-
-# for _, x in enumerate(picks_list_0_1):
-#     x_binary_str_list: list[str] = []
-#     for active_edge_cell_pos_index, active_edge_cell_pos in enumerate(x):
-#         encoding = ""
-#         for i in range(int(sonProblem.xu[active_edge_cell_pos_index])):
-#             encoding += "1" if i+1 == active_edge_cell_pos else "0"
-#         x_binary_str_list.append(encoding)
-#     picks_converteted_0_1.append(x_binary_str_list)
-
-
-# # save result to file
-# sonProblem.son.save_edge_activation_profile_to_file(picks_converteted_1_0, "nsga2_1_0")
-# sonProblem.son.save_edge_activation_profile_to_file(picks_converteted_0_1, "nsga2_0_1")
 
 
 if __name__ == "__main__":

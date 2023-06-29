@@ -903,53 +903,6 @@ class Son:
             pos[str(node[0])] = [node[1]["pos_x"], node[1]["pos_y"]]
         return pos
 
-    def matplotlib_animate_from_encoding(
-            self, i, fig: Figure, pos, activation_matrix: list[list[str]],
-            fig_title: str = ""):
-        fig.clear()
-        plt.title(str(i+1) + "'s solution" + " - " + fig_title)
-
-        # apply activation profile -> update network
-        self.apply_edge_activation_encoding_to_graph(activation_matrix[i])
-
-        node_colors, node_sizes, node_edge_colors, node_alphas = self.get_node_style()
-        edge_colors, edge_width = self.get_edge_style()
-        options_edges = {
-            'width': edge_width,
-            "edge_color": edge_colors,
-            "pos": pos,
-        }
-        options_nodes = {
-            "alpha": node_alphas,
-            'node_color': node_colors,
-            'node_size': node_sizes,
-            "pos": pos,
-            "edgecolors": node_edge_colors,
-        }
-        nx.drawing.nx_pylab.draw_networkx_edges(self.graph, **options_edges)
-        nx.drawing.nx_pylab.draw_networkx_nodes(self.graph, **options_nodes)
-
-    def start_matplotlib_animation_result_from_sheet(self, file_name: str, sheet_name: str):
-        """start simulation over pareto front  with visualization
-        TODO finish doc
-        """
-        # load activation profile from sheet_name
-        activation_matrix = self.get_edge_activation_encoding_from_file(file_name,
-                                                                        sheet_name)
-
-        pos = self.get_node_pos()
-        fig, _ = plt.subplots(figsize=(10, 6))
-
-        anim = animation.FuncAnimation(
-            fig, lambda i: self.matplotlib_animate_from_encoding(
-                i, fig=fig, pos=pos, activation_matrix=activation_matrix, fig_title=sheet_name),
-            frames=len(activation_matrix), interval=1000, repeat=True)
-        # for showing animated plot in jupyter notebook
-        # display(HTML(anim.to_jshtml()))
-        # plt.close(fig)
-        # for showing plot in normal script mode
-        plt.show()
-
     def draw_current_network(self):
         pos = self.get_node_pos()
         node_colors, node_sizes, node_edge_colors, node_alphas = self.get_node_style()
@@ -1064,38 +1017,7 @@ class Son:
 ################# script main #######################
 
 def main():
-    son = Son(adjacencies_file_name="test.json")
-    # bestFit_highestTrafficFirst_HighestDegreeFirst_bsOrderNone
-    # son.start_calculation_bin_packing_save(
-    #     sheet_name="bf_htf_hdf_bsn",
-    #     cell_order_2=CellOrderTwo.HIGHEST_DEGREE_FIRST, bs_order=None,
-    #     bin_packing=BinPackingType.BEST_FIT)
-
-    # worstFit_highestTrafficFirst_HighestDegreeFirst_bsOrderNone
-
-    # son.start_calculation_bin_packing_save(
-    #     sheet_name="wf_htf_tdf_bsn",
-    #     cell_order_2=CellOrderTwo.HIGHEST_DEGREE_FIRST, bs_order=None,
-    #     bin_packing=BinPackingType.WORST_FIT)
-
-    son.find_activation_profile_bin_packing(
-        cell_order_2=CellOrderTwo.HIGHEST_DEGREE_FIRST, bs_order=None,
-        bin_packing=BinPackingType.BEST_FIT)
-
-    # son.start_matplotlib_animation_result_from_sheet("son_input.xlsx", "wf_htf_tdf_bsn")
-
-    # draw diagrams
-    # son.draw_measurement_diagrams(
-    #     ["wf_htf_tdf_bsn"])
-
-    # son.save_json_adjacency_graph_to_file("test.json")
-    # son.load_graph_from_json_adjacency_file("test.json")
-    son.draw_current_network()
-
-
-def animate_result(file: str, sheet: str):
-    son = Son(adjacencies_file_name="test.json")
-    son.start_matplotlib_animation_result_from_sheet(file, sheet)
+    print("nothing")
 
 
 if __name__ == "__main__":
