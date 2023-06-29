@@ -273,7 +273,7 @@ class Son:
             bs_node[1]["load"] = traffic_sum / self.network_node_params[bs_node[1]
                                                                         ["type"]]["antennas"]if traffic_sum > 0 else 0
             # calculate total power consumption for bs -> call only after traffic and load estimations are done
-            bs_node[1]["total_power"] = self.get_total_power(bs_node[0])
+            bs_node[1]["total_power"] = self.get_total_bs_power(bs_node[0])
 
     def update_user_node_attributes(self):
         """ update dynamic user_node attributes depending on active edge and hour (sinr, rssi)
@@ -402,7 +402,7 @@ class Son:
 
         return channel_capacity * factor
 
-    def get_total_power(self, bs_node_id: str):
+    def get_total_bs_power(self, bs_node_id: str):
         bs_type = self.graph.nodes[bs_node_id]["type"]
 
         if self.graph.nodes.data()[bs_node_id]["active"] == False:
@@ -588,7 +588,6 @@ class Son:
                 filter(self.filter_user_nodes, self.graph.nodes.data())):
             rssi_sum += cell_node[1]["rssi"]
             count += 1
-
         return round(rssi_sum/count, 4)
 
     def get_average_dl_datarate(self):

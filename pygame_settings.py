@@ -33,7 +33,10 @@ style = {
             "active": "green"
         },
         "sizes": {
-            "edge_width": 1
+            "edge_width":{
+                "active": 3,
+                "inactive": 1
+            }
         }
     }
 }

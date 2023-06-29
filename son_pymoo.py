@@ -1,9 +1,9 @@
-from fileinput import filename
 import numpy as np
 from pymoo.algorithms.moo.nsga2 import NSGA2
+from pymoo.algorithms.moo.nsga3 import NSGA3
 from pymoo.core.problem import ElementwiseProblem
 from pymoo.optimize import minimize
-from pymoo.algorithms.soo.nonconvex.ga import GA
+from pymoo.util.ref_dirs import get_reference_directions
 from pymoo.core.sampling import Sampling
 from pymoo.core.crossover import Crossover
 from pymoo.core.mutation import Mutation
@@ -30,7 +30,6 @@ class ObjectiveEnum(Enum):
 
 class AlgorithmEnum(Enum):
     NSGA2 = "NSGA2"
-    GA = "GA"
     NSGA3 = "NSGA3"
 
 
@@ -71,7 +70,7 @@ class SonProblemElementWise(ElementwiseProblem):
         super().__init__(n_var=n_var, n_obj=len(obj_dict), xl=np.full_like(xu, 1), xu=xu)
 
     def _evaluate(self, x, out, *args, **kwargs):
-        print("----evaluate start---------")
+
        # convert list[int] back to list[str] encoding
         x_binary_str_list = []
         for active_edge_cell_pos_index, active_edge_cell_pos in enumerate(x):
@@ -81,9 +80,8 @@ class SonProblemElementWise(ElementwiseProblem):
             x_binary_str_list.append(encoding)
 
          # apply x (activation profile) to update network results
-        print("apply_edge_activation_encoding_to_graph start")
+
         self.son.apply_edge_activation_encoding_to_graph(x_binary_str_list)
-        print("end")
 
         # prepare objectives
         objectives = np.array([])
@@ -97,23 +95,20 @@ class SonProblemElementWise(ElementwiseProblem):
         if ObjectiveEnum.AVG_SINR.value in self.obj_dict:
             objectives = np.append(objectives, -self.son.get_average_sinr())
         if ObjectiveEnum.AVG_DL_RATE.value in self.obj_dict:
-            objectives = np.append(objectives, self.son.get_average_dl_datarate())
+            objectives = np.append(objectives, -self.son.get_average_dl_datarate())
         if ObjectiveEnum.AVG_RSSI.value in self.obj_dict:
-            objectives = np.append(objectives, self.son.get_average_rssi())
+            objectives = np.append(objectives, -self.son.get_average_rssi())
 
         out["F"] = objectives
-        print("----evaluate end---------")
 
 
 class SonSampling(Sampling):
     def _do(self, problem: SonProblemElementWise, n_samples, **kwargs):
-        print("----sampling start---------")
         X = np.empty((n_samples, problem.n_var), int)
 
         for i in range(n_samples):
             for j in range(problem.n_var):
                 X[i][j] = np.random.randint(problem.xl[j], problem.xu[j]+1)
-        print("----sampling end---------")
         return X
 
 
@@ -124,7 +119,6 @@ class SonCrossover(Crossover):
         super().__init__(n_parents=2, n_offsprings=1, prob=0.4)
 
     def _do(self, problem: SonProblemElementWise, X, **kwargs):
-        print("----crossover start---------")
 
         # The input of has the following shape (n_parents, n_matings, n_var)
         # for each mating of n_parents=2 -> n_offsprings=1 offspring is produced
@@ -141,7 +135,6 @@ class SonCrossover(Crossover):
             # take first half from parent_a and rest from parent_b
             off_a = np.append(parent_a[0:int(n_var/2)], parent_b[int(n_var/2):])
             Y[0, k] = off_a
-        print("----crossover end---------")
         return Y
 
 
@@ -151,7 +144,6 @@ class SonMutation(Mutation):
         super().__init__()
 
     def _do(self, problem: SonProblemElementWise, X, **kwargs):
-        print("----mutation start---------")
         # for each individual
         for k, individual in enumerate(X):
             r = np.random.random()
@@ -162,7 +154,6 @@ class SonMutation(Mutation):
                     problem.xl[random_index],
                     problem.xu[random_index] + 1)
 
-        print("----mutation end---------")
         return X
 
 
@@ -214,17 +205,18 @@ def start_optimization(
         mutationConfig = SonMutation()
 
     # algorithm config
-    if (algorithm == AlgorithmEnum.GA.value):
-        pymooAlgorithm = GA(pop_size=pop_size,
-                            sampling=samplingConfig,
-                            crossover=crossoverConfig,
-                            mutation=mutationConfig,
-                            n_offsprings=n_offsprings,
-                            eliminate_duplicates=eliminate_duplicates,
-                            n_generations=n_generations
-                            )
+    if (algorithm == AlgorithmEnum.NSGA3.value):
+        # create the reference directions to be used for the optimization
+        ref_dirs = get_reference_directions("uniform", len(objectives), n_partitions=12)
+        pymooAlgorithm = NSGA3(pop_size=pop_size,
+                               sampling=samplingConfig,
+                               crossover=crossoverConfig,
+                               mutation=mutationConfig,
+                               n_offsprings=n_offsprings,
+                               eliminate_duplicates=eliminate_duplicates,
+                               n_generations=n_generations,
+                               ref_dirs=ref_dirs)
     else:
-        print("start with nsga2")
         pymooAlgorithm = NSGA2(pop_size=pop_size,
                                n_offsprings=n_offsprings,
                                sampling=samplingConfig,
@@ -232,6 +224,7 @@ def start_optimization(
                                mutation=mutationConfig,
                                eliminate_duplicates=eliminate_duplicates,
                                n_generations=n_generations
+
                                )
 
     sonProblem = SonProblemElementWise(obj_dict=objectives, son=son_obj)

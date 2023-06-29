@@ -1,5 +1,6 @@
 
 from gc import disable
+from genericpath import isdir
 import math
 from pygame_gui._constants import UI_BUTTON_PRESSED
 import pygame
@@ -41,7 +42,8 @@ def get_network_folder_names() -> list[str]:
     # Filter and print only the directory names
     folder_names: list[str] = ["from file"]
     for item in directory_contents:
-        folder_names.append(item)
+        if os.path.isdir(os.path.join(current_directory, item)):
+            folder_names.append(item)
     return folder_names
 
 
@@ -77,6 +79,10 @@ class Main():
         self.info_text_box = pygame_gui.elements.UITextBox(
             "hallo", pygame.Rect(0, 0, -1, -1), self.manager, wrap_to_height=True, visible=False)
 
+        self.info_text_box_objectives = pygame_gui.elements.UITextBox(
+            "hallo", pygame.Rect(500, 500, -1, -1),
+            manager=self.manager, wrap_to_height=True, visible=False)
+
         self.ui_container = pygame_gui.elements.UIPanel(
             pygame.Rect((GAME_WIDTH, 0), (WINDOW_WIDTH - GAME_WIDTH, WINDOW_HEIGHT)),
             object_id="#ui_container")
@@ -106,11 +112,19 @@ class Main():
 
         self.show_edges_checkbox = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
             (320, 20),
-            (-1, 30)),
+            (50, 30)),
             object_id="#apply_button",
             text="hide", manager=self.manager,
             container=self.ui_container)
         self.show_edges_checkbox_active = True
+
+        self.objectives_checkbox = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
+            (370, 20),
+            (50, 30)),
+            object_id="#apply_button",
+            text="obj", manager=self.manager,
+            container=self.ui_container)
+        self.objectives_checkbox_active = False
 
         self.apply_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
             (320, 230),
@@ -269,7 +283,7 @@ class Main():
                      [edge[0]]["pos_y"] * self.unit_size_y),
                     (self.son.graph.nodes[edge[1]]["pos_x"] * self.unit_size_x, self.son.graph.nodes
                      [edge[1]]["pos_y"] * self.unit_size_y),
-                    style["edges"]["sizes"]["edge_width"])
+                    style["edges"]["sizes"]["edge_width"][activation])
 
     def draw_nodes(self):
         for _, node in enumerate(self.son.graph.nodes.data()):
@@ -322,6 +336,32 @@ class Main():
         else:
             self.info_text_box.hide()
 
+    def show_objectives_info_box(self):
+        if self.objectives_checkbox_active:
+            self.objectives_checkbox_active = False
+            self.info_text_box_objectives.hide()
+            return
+        else:
+            self.objectives_checkbox_active = True
+
+        if len(self.son.graph.nodes) == 0 or len(self.son.graph.edges) == 0:
+            self.info_text_box_objectives.set_text("There is no valid network yet.")
+            self.info_text_box_objectives.show()
+            return
+
+        objective_text = ""
+
+        avg_sinr: float = self.son.get_average_sinr()
+        avg_rssi: float = self.son.get_average_rssi()
+        avg_dl_rate: float = self.son.get_average_dl_datarate()
+        avg_load: float = self.son.get_average_network_load()
+        network_energy_consumption: float = self.son.get_total_energy_consumption()
+        objective_text = "user devices<br>avg_rssi: " + str(avg_rssi) + "<br>avg_sinr: " + str(avg_sinr) + "<br>avg_dl_rate: " + str(
+            avg_dl_rate) + "<br><br>base stations<br>avg_load %: " + str(avg_load) + "<br>total energy consumption: " + str(network_energy_consumption)
+
+        self.info_text_box_objectives.set_text(objective_text)
+        self.info_text_box_objectives.show()
+
     def on_right_click(self, target_pos: tuple[int, int]):
         target_x = round(target_pos[0] / self.unit_size_x, 2)
         target_y = round(target_pos[1] / self.unit_size_y, 2)
@@ -362,6 +402,7 @@ class Main():
                 str(self.network_params_dic[self.right_mouse_action]["channel_bandwidth"]))
             self.input_frequency.set_text(
                 str(self.network_params_dic[self.right_mouse_action]["frequency"]))
+            self.input_frequency.disable()
             self.input_standby_power.set_text(
                 str(self.network_params_dic[self.right_mouse_action]["standby_power"]))
             self.input_static_power.set_text(
@@ -633,9 +674,9 @@ class Main():
                 json.dump(self.algorithm_param_dic, outfile)
 
             start_optimization(
-                pop_size=self.algorithm_param_dic["pop_size"],
-                n_offsprings=self.algorithm_param_dic["n_offsprings"],
-                n_generations=self.algorithm_param_dic["n_generations"],
+                pop_size=int(self.algorithm_param_dic["pop_size"]),
+                n_offsprings=int(self.algorithm_param_dic["n_offsprings"]),
+                n_generations=int(self.algorithm_param_dic["n_generations"]),
                 sampling=self.algorithm_param_dic["sampling"],
                 crossover=self.algorithm_param_dic["crossover"],
                 mutation=self.algorithm_param_dic["mutation"],
@@ -705,9 +746,11 @@ class Main():
         # save adjacencies
         self.son.save_json_adjacency_graph_to_file(
             new_folder_path + "/" + network_name + "_adjacencies.json")
-        # save current parameter config
+        # save current network parameter config
         with open(new_folder_path + "/" + network_name + "_network_config.json", "w+", encoding="utf-8") as outfile:
             json.dump(self.network_params_dic, outfile)
+            # apply current network params to son object
+            self.son.apply_network_node_attributes(self.network_params_dic)
 
         # update network pick dropdown
         self.dropdown_menu_pick_network.kill()
@@ -763,6 +806,8 @@ class Main():
                         self.save_current_network()
                     if event.ui_element == self.show_edges_checkbox:
                         self.onclick_checkbox()
+                    if event.ui_element == self.objectives_checkbox:
+                        self.show_objectives_info_box()
                     if event.ui_element == self.evo_start_button:
                         self.start_evo()
                 if event.type == pygame_gui.UI_DROP_DOWN_MENU_CHANGED:
