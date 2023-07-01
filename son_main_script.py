@@ -531,7 +531,8 @@ class Son:
             load_sum += (bs_node[1]
                          ["traffic"] / self.network_node_params[bs_node[1]["type"]]["antennas"])
             count += 1
-
+        if count == 0:
+            return 0
         return round(load_sum / count, 4)
 
     def get_avg_overlad(self):

@@ -1,1 +1,0 @@
-{"pop_size": 100, "n_offsprings": 20, "n_generations": 10, "termination": "", "sampling": "BIG_BS_FIRST_SAMPLING", "crossover": "ONE_POINT_CROSSOVER", "mutation": "RANDOM_FLIP", "eliminate_duplicates": true, "objectives": ["AVG_DL_RATE", "AVG_LOAD"], "algorithm": "NSGA2"}

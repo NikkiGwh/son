@@ -683,8 +683,8 @@ class Main():
                 eliminate_duplicates=True, objectives=self.algorithm_param_dic["objectives"],
                 termination=self.algorithm_param_dic["termination"],
                 algorithm=self.algorithm_param_dic["algorithm"],
-                file_name="datastore/" + self.dropdown_menu_pick_network.selected_option +
-                "/algorithm_config_" + str(result_directory_count) + "/" + "ind",
+                folder_path="datastore/" + self.dropdown_menu_pick_network.selected_option +
+                "/algorithm_config_" + str(result_directory_count) + "/",
                 son_obj=self.son)
 
             # update algo param config dropdown

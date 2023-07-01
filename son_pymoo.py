@@ -1,3 +1,4 @@
+import json
 import numpy as np
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.algorithms.moo.nsga3 import NSGA3
@@ -22,7 +23,7 @@ class ObjectiveEnum(Enum):
     AVG_LOAD = "AVG_LOAD"
     AVG_SINR = "AVG_SINR"
     OVERLOAD = "OVERLOAD"
-    AVG_POWER_CONSUMPTION = "AVG_POWER_CONSUMPTION"
+    POWER_CONSUMPTION = "POWER_CONSUMPTION"
     AVG_RSSI = "AVG_RSSI"
     AVG_DL_RATE = "AVG_DL_RATE"
     ENERGY_EFFICIENCY = "ENERGY_EFFICIENCY"
@@ -74,8 +75,10 @@ class SonProblemElementWise(ElementwiseProblem):
        # convert list[int] back to list[str] encoding
         x_binary_str_list = []
         for active_edge_cell_pos_index, active_edge_cell_pos in enumerate(x):
+
             encoding = ""
             for i in range(int(self.xu[active_edge_cell_pos_index])):
+
                 encoding += "1" if i+1 == active_edge_cell_pos else "0"
             x_binary_str_list.append(encoding)
 
@@ -90,7 +93,7 @@ class SonProblemElementWise(ElementwiseProblem):
             objectives = np.append(objectives, self.son.get_average_network_load())
         if ObjectiveEnum.OVERLOAD.value in self.obj_dict:
             objectives = np.append(objectives, self.son.get_avg_overlad())
-        if ObjectiveEnum.AVG_POWER_CONSUMPTION.value in self.obj_dict:
+        if ObjectiveEnum.POWER_CONSUMPTION.value in self.obj_dict:
             objectives = np.append(objectives, self.son.get_total_energy_consumption())
         if ObjectiveEnum.AVG_SINR.value in self.obj_dict:
             objectives = np.append(objectives, -self.son.get_average_sinr())
@@ -179,7 +182,7 @@ def start_optimization(
         objectives: list[str],
         algorithm: str,
         son_obj: Son,
-        file_name: str):
+        folder_path: str):
 
     pymooAlgorithm = None
     samplingConfig = None
@@ -251,13 +254,34 @@ def start_optimization(
 
     # save encoding to excel
     sonProblem.son.save_edge_activation_profile_to_file(
-        converted_encoding, result_file_name=file_name + "_encoding.xlsx",
+        converted_encoding, result_file_name=folder_path + "_encoding.xlsx",
         result_sheet_name="encoding")
-    # save all result individuums as json
+    # save all result individuums as json and create objective result dict
+    objective_result_dic = {
+        "optimization_objectives": objectives,
+        "results": []}
+
     for i, individuum in enumerate(converted_encoding):
         sonProblem.son.apply_edge_activation_encoding_to_graph(individuum)
+        objective_result_dic["results"].append(
+            {"ind_result_" +
+             str(i + 1):
+             {ObjectiveEnum.AVG_SINR.name: sonProblem.son.get_average_sinr(),
+              ObjectiveEnum.AVG_RSSI.name: sonProblem.son.get_average_rssi(),
+              ObjectiveEnum.AVG_LOAD.name: sonProblem.son.get_average_network_load(),
+              ObjectiveEnum.POWER_CONSUMPTION.name: sonProblem.son.get_total_energy_consumption(),
+              ObjectiveEnum.AVG_DL_RATE.name: sonProblem.son.get_average_dl_datarate(), }})
         sonProblem.son.save_json_adjacency_graph_to_file(
-            filename=file_name + "_result_" + str(i + 1) + ".json")
+            filename=folder_path + "ind_result_" + str(i + 1) + ".json")
+
+    # save objecitve results to overview file
+    # Convert the list to JSON
+    json_data = json.dumps(objective_result_dic)
+
+    # Save JSON data to a file
+    file_path = folder_path + "objectives_result.json"
+    with open(file_path, 'w', encoding="utf-8") as file:
+        file.write(json_data)
 
 # Augmented Scalarization Function (ASF)
 
