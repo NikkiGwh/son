@@ -27,7 +27,7 @@ default_algorithm_param_config = {
     "sampling": SamplingEnum.BIG_BS_FIRST_SAMPLING.value,
     "crossover": CrossoverEnum.ONE_POINT_CROSSOVER.value,
     "mutation": MutationEnum.RANDOM_FLIP.value,
-    "eliminate_duplicates": True,
+    "eliminate_duplicates": "True",
     "objectives": [ObjectiveEnum.AVG_DL_RATE.value, ObjectiveEnum.AVG_LOAD.value],
     "algorithm": AlgorithmEnum.NSGA2.value,
 }
@@ -485,7 +485,6 @@ class Main():
         return
 
     def on_dropdown_input_algorithm_config_changed(self, event: pygame.Event, param_key: str):
-
         self.algorithm_param_dic[param_key] = event.text
 
     def on_selectionlist_input_changed(self, event: pygame.Event):
@@ -512,6 +511,7 @@ class Main():
                 self.input_n_generations.kill()
                 self.input_n_offsprings.kill()
                 self.input_pop_size.kill()
+                self.input_eliminate_duplicates.kill()
                 self.create_algo_param_ui_elements()
                 # update pick result dropdown
                 self.dropdown_pick_result.kill()
@@ -598,10 +598,21 @@ class Main():
             container=self.ui_container
         )
 
+        self.input_eliminate_duplicates_label = pygame_gui.elements.UILabel(pygame.Rect(
+            (20, 470), (-1, 30)), "eliminate duplicates", self.manager, self.ui_container)
+        self.input_eliminate_duplicates = pygame_gui.elements.UIDropDownMenu(
+            options_list=["True", "False"],
+            starting_option=str(self.algorithm_param_dic["eliminate_duplicates"]),
+            relative_rect=pygame.Rect(
+                220, 470, 250, 30),
+            manager=self.manager,
+            container=self.ui_container
+        )
+
         self.input_objectves_label = pygame_gui.elements.UILabel(pygame.Rect(
-            (20, 470), (-1, 30)), "objectives", self.manager, self.ui_container)
+            (20, 500), (-1, 30)), "objectives", self.manager, self.ui_container)
         self.input_objectives = pygame_gui.elements.UISelectionList(
-            relative_rect=pygame.Rect(220, 470, 250, 100),
+            relative_rect=pygame.Rect(220, 500, 250, 100),
             item_list=[item.value for item in ObjectiveEnum],
             allow_multi_select=True,
             container=self.ui_container,
@@ -680,12 +691,12 @@ class Main():
                 sampling=self.algorithm_param_dic["sampling"],
                 crossover=self.algorithm_param_dic["crossover"],
                 mutation=self.algorithm_param_dic["mutation"],
-                eliminate_duplicates=True, objectives=self.algorithm_param_dic["objectives"],
+                eliminate_duplicates=self.algorithm_param_dic["eliminate_duplicates"] == "True",
+                objectives=self.algorithm_param_dic["objectives"],
                 termination=self.algorithm_param_dic["termination"],
                 algorithm=self.algorithm_param_dic["algorithm"],
                 folder_path="datastore/" + self.dropdown_menu_pick_network.selected_option +
-                "/algorithm_config_" + str(result_directory_count) + "/",
-                son_obj=self.son)
+                "/algorithm_config_" + str(result_directory_count) + "/", son_obj=self.son)
 
             # update algo param config dropdown
             self.dropdown_pick_algo_config.kill()
@@ -823,6 +834,9 @@ class Main():
                         self.on_dropdown_input_algorithm_config_changed(event, "sampling")
                     if event.ui_element == self.input_algorithm:
                         self.on_dropdown_input_algorithm_config_changed(event, "algorithm")
+                    if event.ui_element == self.input_eliminate_duplicates:
+                        self.on_dropdown_input_algorithm_config_changed(
+                            event, "eliminate_duplicates")
                     if event.ui_element == self.dropdown_pick_algo_config:
                         self.on_dropdown_pick_algo_config_changed(event)
                     if event.ui_element == self.dropdown_pick_result:

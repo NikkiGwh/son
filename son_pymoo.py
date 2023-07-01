@@ -18,6 +18,9 @@ from matplotlib import pyplot as plt
 from enum import Enum
 from pymoo.decomposition.asf import ASF
 
+from pymoo.termination.default import DefaultSingleObjectiveTermination
+from pymoo.termination import get_termination
+
 
 class ObjectiveEnum(Enum):
     AVG_LOAD = "AVG_LOAD"
@@ -231,10 +234,14 @@ def start_optimization(
                                )
 
     sonProblem = SonProblemElementWise(obj_dict=objectives, son=son_obj)
+
+    # build termination criterias
+
+    termination_obj = get_termination("n_gen", n_generations)
     # start computatoin with  termination criteria
 
     result = minimize(sonProblem, pymooAlgorithm,
-                      termination=("n_gen", n_generations), seed=1, verbose=True)
+                      termination=termination_obj, seed=1, verbose=True)
 
     decisionSpace = result.X
     objectiveSpace = result.F
