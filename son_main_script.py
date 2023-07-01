@@ -844,23 +844,26 @@ class Son:
             cell_encoding_list.append(cell_encoding_str)
         return cell_encoding_list
 
-    def apply_edge_activation_encoding_to_graph(self, encoding: list[str]):
+    def apply_edge_activation_encoding_to_graph(self, encoding: list[int]):
         """takes activation list encoding and applies it on network accordingly
 
         Args:
-            encoding (list[str]): activation list of cell edges
+            encoding (list[int]): activation list of cell edges
         """
         for user_node_index, user_node in enumerate(
                 filter(self.filter_user_nodes, self.graph.nodes.data())):
             for edge_index, edge in enumerate(self.graph[user_node[0]].items()):
-                if encoding[user_node_index][edge_index] == "1":
-                    self.set_edge_active(user_node[0], edge[0], True)
+                if encoding[user_node_index]-1 == edge_index:
+                    # self.set_edge_active(user_node[0], edge[0], True)
+                    edge[1]["active"] = True
                     break
                 else:
-                    self.set_edge_active(user_node[0], edge[0], False)
+                    edge[1]["active"] = False
+                    # self.set_edge_active(user_node[0], edge[0], False)
+        self.update_network_attributes()
 
     def save_edge_activation_profile_to_file(
-            self, encoding: list[list[str]], result_file_name: str,
+            self, encoding: list[int], result_file_name: str,
             result_sheet_name: str):
         df = pd.DataFrame(encoding)
 
@@ -870,7 +873,7 @@ class Son:
     def get_edge_activation_encoding_from_file(self, result_file_name: str, result_sheet_name: str):
         df = pd.read_excel(result_file_name, result_sheet_name,
                            dtype=object, header=None, index_col=None)
-        encodings: list[list[str]] = df.values.tolist()
+        encodings: list[list[int]] = df.values.tolist()
         return encodings
 
     ################ start calculation methods without visualization and with saving the results ############
@@ -939,79 +942,6 @@ class Son:
         nx.drawing.nx_pylab.draw_networkx_nodes(self.graph, **options_nodes)
         nx.drawing.nx_pylab.draw_networkx_labels(
             self.graph, label_positions, label_dic, font_color="black")
-        plt.show()
-
-    def draw_measurement_diagrams(self, result_file_name: str, result_sheet_name_list: list[str]):
-
-        _, ax_sinr = plt.subplots(layout="constrained")
-        _, ax_load = plt.subplots(layout="constrained")
-        _, ax_overload = plt.subplots(layout="constrained")
-        _, ax_energy = plt.subplots(layout="constrained")
-        ax_load.set_ylim(0, 1)
-
-        avg_sinr_values_dict: dict[str, list[float]] = {}
-        overload_values_dict: dict[str, list[float]] = {}
-        energy_values_dict: dict[str, list[float]] = {}
-        avg_load_values_dict: dict[str, list[float]] = {}
-
-        for _, sheet_name in enumerate(result_sheet_name_list):
-            # load activation profile for current network layout from file (pareto front solutions)
-            activation_profile_matrix = self.get_edge_activation_encoding_from_file(
-                result_file_name,
-                sheet_name)
-
-            overload_list = []
-            total_power_list = []
-            avg_load_list = []
-            avg_sinr_list = []
-            avg_rssi_list = []
-            avg_dl_datarate_list = []
-
-            for _, current_activation_profile in enumerate(activation_profile_matrix):
-
-                # apply activation profile and update network
-                self.apply_edge_activation_encoding_to_graph(current_activation_profile)
-                # append avg_sinr to avg_sinr_list for sheet_name
-                avg_sinr_list.append(self.get_average_sinr())
-                avg_load_list.append(self.get_average_network_load())
-                overload_list.append(self.get_avg_overlad())
-                total_power_list.append(self.get_total_energy_consumption())
-                avg_rssi_list.append(self.get_average_rssi())
-                avg_dl_datarate_list.append(self.get_average_dl_datarate())
-            # insert avg_sinr_list dict for plotting
-            avg_sinr_values_dict[sheet_name] = avg_sinr_list
-            overload_values_dict[sheet_name] = overload_list
-
-            energy_values_dict[sheet_name] = total_power_list
-            avg_load_values_dict[sheet_name] = avg_load_list
-
-        width = 1/(len(result_sheet_name_list)+1)  # the width of the bars
-        multiplier = 0
-        for sheet_name, avg_sinr_24_hour_list in avg_sinr_values_dict.items():
-            x = np.arange(1, len(avg_sinr_24_hour_list)+1)
-            offset = width * multiplier
-            ax_sinr.bar(x + offset, avg_sinr_24_hour_list, width, label=sheet_name)
-            ax_energy.bar(x + offset, energy_values_dict[sheet_name], width, label=sheet_name)
-            ax_overload.bar(x + offset, overload_values_dict[sheet_name], width, label=sheet_name)
-            ax_load.bar(x + offset, avg_load_values_dict[sheet_name], width, label=sheet_name)
-            multiplier += 1
-
-        # labels and legend
-        ax_sinr.set_ylabel('sinr')
-        ax_sinr.set_title('avg_sinr per hour')
-        ax_sinr.legend(loc='lower left', bbox_to_anchor=(0, 1.05))
-
-        ax_overload.set_ylabel('avg_overload in %')
-        ax_overload.set_title('avg_overload per hour')
-        ax_overload.legend(loc='lower left', bbox_to_anchor=(0, 1.05))
-
-        ax_load.set_ylabel('avg load in %')
-        ax_load.set_title('avg_load per hour')
-        ax_load.legend(loc='lower left', bbox_to_anchor=(0, 1.05))
-
-        ax_energy.set_ylabel('energy consumption')
-        ax_energy.set_title('total_energy_consumption per hour')
-        ax_energy.legend(loc='lower left', bbox_to_anchor=(0, 1.05))
         plt.show()
 
 

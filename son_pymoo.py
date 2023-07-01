@@ -75,19 +75,19 @@ class SonProblemElementWise(ElementwiseProblem):
 
     def _evaluate(self, x, out, *args, **kwargs):
 
-       # convert list[int] back to list[str] encoding
-        x_binary_str_list = []
-        for active_edge_cell_pos_index, active_edge_cell_pos in enumerate(x):
+        # convert list[int] back to list[str] encoding
+        #     x_binary_str_list = []
+        #     for active_edge_cell_pos_index, active_edge_cell_pos in enumerate(x):
 
-            encoding = ""
-            for i in range(int(self.xu[active_edge_cell_pos_index])):
+        #         encoding = ""
+        #         for i in range(int(self.xu[active_edge_cell_pos_index])):
 
-                encoding += "1" if i+1 == active_edge_cell_pos else "0"
-            x_binary_str_list.append(encoding)
+        #             encoding += "1" if i+1 == active_edge_cell_pos else "0"
+        #         x_binary_str_list.append(encoding)
 
-         # apply x (activation profile) to update network results
+        # apply x (activation profile) to update network results
 
-        self.son.apply_edge_activation_encoding_to_graph(x_binary_str_list)
+        self.son.apply_edge_activation_encoding_to_graph(x)
 
         # prepare objectives
         objectives = np.array([])
@@ -249,26 +249,26 @@ def start_optimization(
     print(decisionSpace)
 
     # convert encoding (decisionspace results) back to  binary encoding
-    converted_encoding: list[list[str]] = []
-    for _, x in enumerate(decisionSpace):
-        x_binary_str_list: list[str] = []
-        for active_edge_cell_pos_index, active_edge_cell_pos in enumerate(x):
-            encoding = ""
-            for i in range(int(sonProblem.xu[active_edge_cell_pos_index])):
-                encoding += "1" if i+1 == active_edge_cell_pos else "0"
-            x_binary_str_list.append(encoding)
-        converted_encoding.append(x_binary_str_list)
+    # converted_encoding: list[list[str]] = []
+    # for _, x in enumerate(decisionSpace):
+    #     x_binary_str_list: list[str] = []
+    #     for active_edge_cell_pos_index, active_edge_cell_pos in enumerate(x):
+    #         encoding = ""
+    #         for i in range(int(sonProblem.xu[active_edge_cell_pos_index])):
+    #             encoding += "1" if i+1 == active_edge_cell_pos else "0"
+    #         x_binary_str_list.append(encoding)
+    #     converted_encoding.append(x_binary_str_list)
 
     # save encoding to excel
     sonProblem.son.save_edge_activation_profile_to_file(
-        converted_encoding, result_file_name=folder_path + "_encoding.xlsx",
+        decisionSpace, result_file_name=folder_path + "_encoding.xlsx",
         result_sheet_name="encoding")
     # save all result individuums as json and create objective result dict
     objective_result_dic = {
         "optimization_objectives": objectives,
         "results": []}
 
-    for i, individuum in enumerate(converted_encoding):
+    for i, individuum in enumerate(decisionSpace):
         sonProblem.son.apply_edge_activation_encoding_to_graph(individuum)
         objective_result_dic["results"].append(
             {"ind_result_" +
