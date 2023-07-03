@@ -193,17 +193,17 @@ class Main():
 
         # bottom UI
         self.bin_packing_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
-            (20, 500), (-1, 30)), object_id="#bin_packing_button", text='bin packing',
+            (20, 530), (-1, 30)), object_id="#bin_packing_button", text='bin packing',
             manager=self.manager, container=self.ui_container)
 
         self.evo_start_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
-            (20, 530), (-1, 30)), text='start evo',
+            (20, 560), (-1, 30)), text='start evo',
             manager=self.manager, container=self.ui_container)
 
         self.dropdown_pick_algo_config = pygame_gui.elements.UIDropDownMenu(
             options_list=self.get_configs_for_current_network(),
             starting_option=self.get_configs_for_current_network()[0],
-            relative_rect=pygame.Rect((20, 560), (200, 30)),
+            relative_rect=pygame.Rect((20, 590), (200, 30)),
             manager=self.manager,
             container=self.ui_container,
         )
@@ -212,7 +212,7 @@ class Main():
         self.dropdown_pick_result = pygame_gui.elements.UIDropDownMenu(
             options_list=self.get_results_for_current_config(),
             starting_option=self.get_results_for_current_config()[0],
-            relative_rect=pygame.Rect((20, 590), (200, 30)),
+            relative_rect=pygame.Rect((20, 620), (200, 30)),
             manager=self.manager,
             container=self.ui_container,
         )
@@ -465,7 +465,7 @@ class Main():
             self.dropdown_pick_algo_config = pygame_gui.elements.UIDropDownMenu(
                 options_list=self.get_configs_for_current_network(),
                 starting_option=self.get_configs_for_current_network()[0],
-                relative_rect=pygame.Rect((20, 560), (200, 30)),
+                relative_rect=pygame.Rect((20, 590), (200, 30)),
                 manager=self.manager,
                 container=self.ui_container,
             )
@@ -474,7 +474,7 @@ class Main():
             self.dropdown_pick_result = pygame_gui.elements.UIDropDownMenu(
                 options_list=self.get_results_for_current_config(),
                 starting_option=self.get_results_for_current_config()[0],
-                relative_rect=pygame.Rect((20, 590), (200, 30)),
+                relative_rect=pygame.Rect((20, 620), (200, 30)),
                 manager=self.manager,
                 container=self.ui_container,
             )
@@ -518,7 +518,7 @@ class Main():
                 self.dropdown_pick_result = pygame_gui.elements.UIDropDownMenu(
                     options_list=self.get_results_for_current_config(),
                     starting_option=self.get_results_for_current_config()[0],
-                    relative_rect=pygame.Rect((20, 590), (200, 30)),
+                    relative_rect=pygame.Rect((20, 620), (200, 30)),
                     manager=self.manager,
                     container=self.ui_container,
                 )
@@ -696,14 +696,15 @@ class Main():
                 termination=self.algorithm_param_dic["termination"],
                 algorithm=self.algorithm_param_dic["algorithm"],
                 folder_path="datastore/" + self.dropdown_menu_pick_network.selected_option +
-                "/algorithm_config_" + str(result_directory_count) + "/", son_obj=self.son)
+                "/algorithm_config_" + str(result_directory_count) + "/",
+                son_obj=self.son)
 
             # update algo param config dropdown
             self.dropdown_pick_algo_config.kill()
             self.dropdown_pick_algo_config = pygame_gui.elements.UIDropDownMenu(
                 options_list=self.get_configs_for_current_network(),
                 starting_option=self.get_configs_for_current_network()[-1],
-                relative_rect=pygame.Rect((20, 560), (200, 30)),
+                relative_rect=pygame.Rect((20, 590), (200, 30)),
                 manager=self.manager,
                 container=self.ui_container,
             )
@@ -712,7 +713,7 @@ class Main():
             self.dropdown_pick_result = pygame_gui.elements.UIDropDownMenu(
                 options_list=self.get_results_for_current_config(),
                 starting_option=self.get_results_for_current_config()[0],
-                relative_rect=pygame.Rect((20, 590), (200, 30)),
+                relative_rect=pygame.Rect((20, 620), (200, 30)),
                 manager=self.manager,
                 container=self.ui_container,
             )

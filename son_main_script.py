@@ -276,7 +276,7 @@ class Son:
             bs_node[1]["total_power"] = self.get_total_bs_power(bs_node[0])
 
     def update_user_node_attributes(self):
-        """ update dynamic user_node attributes depending on active edge and hour (sinr, rssi)
+        """ update dynamic user_node attributes depending on active edge (sinr, rssi)
         not dl_datarate because this value has to be updated separately after other attributes of bs_nodes and
         user_nodes were updated
 
@@ -856,7 +856,6 @@ class Son:
                 if encoding[user_node_index]-1 == edge_index:
                     # self.set_edge_active(user_node[0], edge[0], True)
                     edge[1]["active"] = True
-                    break
                 else:
                     edge[1]["active"] = False
                     # self.set_edge_active(user_node[0], edge[0], False)

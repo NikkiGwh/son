@@ -2,7 +2,7 @@ import json
 import numpy as np
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.algorithms.moo.nsga3 import NSGA3
-from pymoo.core.problem import ElementwiseProblem
+from pymoo.core.problem import Problem
 from pymoo.optimize import minimize
 from pymoo.util.ref_dirs import get_reference_directions
 from pymoo.core.sampling import Sampling
@@ -14,12 +14,14 @@ from pymoo.operators.mutation.pm import PM
 from pymoo.operators.repair.rounding import RoundingRepair
 from pymoo.operators.sampling.rnd import IntegerRandomSampling
 from son_main_script import Son
-from matplotlib import pyplot as plt
 from enum import Enum
 from pymoo.decomposition.asf import ASF
+from pymoo.core.callback import Callback
 
-from pymoo.termination.default import DefaultSingleObjectiveTermination
 from pymoo.termination import get_termination
+from multiprocessing.pool import ThreadPool
+import threading
+import copy
 
 
 class ObjectiveEnum(Enum):
@@ -57,15 +59,29 @@ class SamplingEnum(Enum):
     HIGH_RSSI_FIRST_SAMPLING = "HIGH_RSSI_FIRST_SAMPLING"
 
 
-class SonProblemElementWise(ElementwiseProblem):
+class SonProblemElementWise(Problem):
     def __init__(self, obj_dict: list[str], son: Son):
+        # prepara flags
+        # self.users_changed_index_list: list[int] = []
         # prepare network
-        self.son = son
+        self.son_original = son
+
+        # self.son1 = copy.deepcopy(son)
+        # self.son2 = copy.deepcopy(son)
+        # self.son3 = copy.deepcopy(son)
+        # self.son4 = copy.deepcopy(son)
+        # self.son5 = copy.deepcopy(son)
+        # self.n_threads = 1
+        # self.pool = ThreadPool(self.n_threads)
+
         self.obj_dict = obj_dict
-        n_var = len(list(filter(self.son.filter_user_nodes, self.son.graph.nodes.data())))
+        n_var = len(
+            list(
+                filter(
+                    self.son_original.filter_user_nodes, self.son_original.graph.nodes.data())))
 
         # prepare problem parameter
-        binary_activation_profile_encoding = self.son.get_edge_activation_encoding_from_graph()
+        binary_activation_profile_encoding = self.son_original.get_edge_activation_encoding_from_graph()
         xu = np.array([])
         for _, cell_edges_encoded in enumerate(binary_activation_profile_encoding):
             xu = np.append(xu, len(cell_edges_encoded))
@@ -75,37 +91,54 @@ class SonProblemElementWise(ElementwiseProblem):
 
     def _evaluate(self, x, out, *args, **kwargs):
 
-        # convert list[int] back to list[str] encoding
-        #     x_binary_str_list = []
-        #     for active_edge_cell_pos_index, active_edge_cell_pos in enumerate(x):
+        def my_eval(x_i):
+            # current_thread = threading.current_thread()
 
-        #         encoding = ""
-        #         for i in range(int(self.xu[active_edge_cell_pos_index])):
+            # if current_thread.name == "Thread-6 (worker)":
+            #     current_son = self.son1
+            # if current_thread.name == "Thread-7 (worker)":
+            #     current_son = self.son2
+            # if current_thread.name == "Thread-8 (worker)":
+            #     current_son = self.son3
+            # if current_thread.name == "Thread-9 (worker)":
+            #     current_son = self.son4
+            # if current_thread.name == "Thread-10 (worker)":
+            #     current_son = self.son5
+            current_son = copy.deepcopy(self.son_original)
+            # prepare objectives
+            objectives = np.array([])
 
-        #             encoding += "1" if i+1 == active_edge_cell_pos else "0"
-        #         x_binary_str_list.append(encoding)
+            if current_son is not None:
+                current_son.apply_edge_activation_encoding_to_graph(x_i)
 
-        # apply x (activation profile) to update network results
+                if ObjectiveEnum.AVG_LOAD.value in self.obj_dict:
+                    objectives = np.append(objectives, current_son.get_average_network_load())
+                if ObjectiveEnum.OVERLOAD.value in self.obj_dict:
+                    objectives = np.append(objectives, current_son.get_avg_overlad())
+                if ObjectiveEnum.POWER_CONSUMPTION.value in self.obj_dict:
+                    objectives = np.append(objectives, current_son.get_total_energy_consumption())
+                if ObjectiveEnum.AVG_SINR.value in self.obj_dict:
+                    objectives = np.append(objectives, -current_son.get_average_sinr())
+                if ObjectiveEnum.AVG_DL_RATE.value in self.obj_dict:
+                    objectives = np.append(objectives, -current_son.get_average_dl_datarate())
+                if ObjectiveEnum.AVG_RSSI.value in self.obj_dict:
+                    objectives = np.append(objectives, -current_son.get_average_rssi())
+            else:
+                print("#####no#######")
+            return objectives
 
-        self.son.apply_edge_activation_encoding_to_graph(x)
+        n_threads = 1
+        with ThreadPool(n_threads) as pool:
+            # prepare the parameters for the pool
+            parameter_tuple_list = [[x[k]] for k in range(len(x))]
+            F = pool.starmap(my_eval, parameter_tuple_list,
+                             chunksize=len(x) // n_threads)
 
-        # prepare objectives
-        objectives = np.array([])
+            out["F"] = np.array(F)
 
-        if ObjectiveEnum.AVG_LOAD.value in self.obj_dict:
-            objectives = np.append(objectives, self.son.get_average_network_load())
-        if ObjectiveEnum.OVERLOAD.value in self.obj_dict:
-            objectives = np.append(objectives, self.son.get_avg_overlad())
-        if ObjectiveEnum.POWER_CONSUMPTION.value in self.obj_dict:
-            objectives = np.append(objectives, self.son.get_total_energy_consumption())
-        if ObjectiveEnum.AVG_SINR.value in self.obj_dict:
-            objectives = np.append(objectives, -self.son.get_average_sinr())
-        if ObjectiveEnum.AVG_DL_RATE.value in self.obj_dict:
-            objectives = np.append(objectives, -self.son.get_average_dl_datarate())
-        if ObjectiveEnum.AVG_RSSI.value in self.obj_dict:
-            objectives = np.append(objectives, -self.son.get_average_rssi())
-
-        out["F"] = objectives
+        # parameter_tuple_list = [[x[k]] for k in range(len(x))]
+        # F = self.pool.starmap(my_eval, parameter_tuple_list, chunksize=len(x) // self.n_threads)
+        # out["F"] = np.array(F)
 
 
 class SonSampling(Sampling):
@@ -151,6 +184,7 @@ class SonMutation(Mutation):
 
     def _do(self, problem: SonProblemElementWise, X, **kwargs):
         # for each individual
+        # print(problem.users_changed_index_list)
         for k, individual in enumerate(X):
             r = np.random.random()
             # with a probabilty of 30% switch on another random edge
@@ -169,9 +203,21 @@ class SonDublicateElimination(ElementwiseDuplicateElimination):
         return np.array_equal(a, b)
 
 
+class MyCallback(Callback):
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.data["best"] = []
+        self.user_list = []
+
+    def notify(self, algorithm):
+        self.data["best"].append(algorithm.pop.get("F").min())
+        algorithm.problem.users_changed_index_list.append(algorithm.n_gen)
+
 ################################ main ###################
 # TODO add weigthing parameters for objectives with augumented scalarization function
 # TODO add parameters for different termination criteria
+
 
 def start_optimization(
         pop_size: int,
@@ -242,11 +288,13 @@ def start_optimization(
 
     result = minimize(sonProblem, pymooAlgorithm,
                       termination=termination_obj, seed=1, verbose=True)
+    # sonProblem.pool.close()
 
     decisionSpace = result.X
     objectiveSpace = result.F
     print(objectiveSpace)
     print(decisionSpace)
+    print(result.exec_time)
 
     # convert encoding (decisionspace results) back to  binary encoding
     # converted_encoding: list[list[str]] = []
@@ -260,7 +308,7 @@ def start_optimization(
     #     converted_encoding.append(x_binary_str_list)
 
     # save encoding to excel
-    sonProblem.son.save_edge_activation_profile_to_file(
+    sonProblem.son_original.save_edge_activation_profile_to_file(
         decisionSpace, result_file_name=folder_path + "_encoding.xlsx",
         result_sheet_name="encoding")
     # save all result individuums as json and create objective result dict
@@ -269,16 +317,16 @@ def start_optimization(
         "results": []}
 
     for i, individuum in enumerate(decisionSpace):
-        sonProblem.son.apply_edge_activation_encoding_to_graph(individuum)
+        sonProblem.son_original.apply_edge_activation_encoding_to_graph(individuum)
         objective_result_dic["results"].append(
             {"ind_result_" +
              str(i + 1):
-             {ObjectiveEnum.AVG_SINR.name: sonProblem.son.get_average_sinr(),
-              ObjectiveEnum.AVG_RSSI.name: sonProblem.son.get_average_rssi(),
-              ObjectiveEnum.AVG_LOAD.name: sonProblem.son.get_average_network_load(),
-              ObjectiveEnum.POWER_CONSUMPTION.name: sonProblem.son.get_total_energy_consumption(),
-              ObjectiveEnum.AVG_DL_RATE.name: sonProblem.son.get_average_dl_datarate(), }})
-        sonProblem.son.save_json_adjacency_graph_to_file(
+             {ObjectiveEnum.AVG_SINR.name: sonProblem.son_original.get_average_sinr(),
+              ObjectiveEnum.AVG_RSSI.name: sonProblem.son_original.get_average_rssi(),
+              ObjectiveEnum.AVG_LOAD.name: sonProblem.son_original.get_average_network_load(),
+              ObjectiveEnum.POWER_CONSUMPTION.name: sonProblem.son_original.get_total_energy_consumption(),
+              ObjectiveEnum.AVG_DL_RATE.name: sonProblem.son_original.get_average_dl_datarate(), }})
+        sonProblem.son_original.save_json_adjacency_graph_to_file(
             filename=folder_path + "ind_result_" + str(i + 1) + ".json")
 
     # save objecitve results to overview file
@@ -311,8 +359,6 @@ def start_optimization(
 
 # decisionSpace = results.X
 # objectiveSpace = results.F
-# print(objectiveSpace)
-# print(decisionSpace)
 
 # normalize objective space
 
@@ -348,9 +394,4 @@ def start_optimization(
 
 
 if __name__ == "__main__":
-    son = Son(adjacencies_file_name="datastore/smallnetwork/smallnetwork_adjacencies.json",
-              parameter_config_file_name="datastore/smallnetwork/smallnetwork_network_config.json")
-    start_optimization(
-        100, 20, 10, "", SamplingEnum.SMALL_BS_FIRST_SAMPLING.value, CrossoverEnum.ONE_POINT_CROSSOVER.value,
-        MutationEnum.RANDOM_FLIP.value, True, [ObjectiveEnum.AVG_SINR.value, ObjectiveEnum.AVG_LOAD.value],
-        AlgorithmEnum.NSGA2.value, son, "datastore/smallnetwork/algorithm_config_1/ind")
+    print("nothing")
