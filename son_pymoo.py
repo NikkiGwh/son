@@ -319,13 +319,13 @@ def start_optimization(
     for i, individuum in enumerate(decisionSpace):
         sonProblem.son_original.apply_edge_activation_encoding_to_graph(individuum)
         objective_result_dic["results"].append(
-            {"ind_result_" +
-             str(i + 1):
+            ("ind_result_" +
+             str(i + 1),
              {ObjectiveEnum.AVG_SINR.name: sonProblem.son_original.get_average_sinr(),
               ObjectiveEnum.AVG_RSSI.name: sonProblem.son_original.get_average_rssi(),
               ObjectiveEnum.AVG_LOAD.name: sonProblem.son_original.get_average_network_load(),
               ObjectiveEnum.POWER_CONSUMPTION.name: sonProblem.son_original.get_total_energy_consumption(),
-              ObjectiveEnum.AVG_DL_RATE.name: sonProblem.son_original.get_average_dl_datarate(), }})
+              ObjectiveEnum.AVG_DL_RATE.name: sonProblem.son_original.get_average_dl_datarate()}))
         sonProblem.son_original.save_json_adjacency_graph_to_file(
             filename=folder_path + "ind_result_" + str(i + 1) + ".json")
 
