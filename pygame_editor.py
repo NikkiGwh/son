@@ -355,9 +355,10 @@ class Main():
         avg_rssi: float = self.son.get_average_rssi()
         avg_dl_rate: float = self.son.get_average_dl_datarate()
         avg_load: float = self.son.get_average_network_load()
+        energy_efficiency: float = self.son.get_energy_efficiency()
         network_energy_consumption: float = self.son.get_total_energy_consumption()
-        objective_text = "user devices<br>avg_rssi: " + str(avg_rssi) + "<br>avg_sinr: " + str(avg_sinr) + "<br>avg_dl_rate: " + str(
-            avg_dl_rate) + "<br><br>base stations<br>avg_load %: " + str(avg_load) + "<br>total energy consumption: " + str(network_energy_consumption)
+        objective_text = "user devices<br>avg_rssi: " + str(avg_rssi) + "<br>avg_sinr: " + str(avg_sinr) + "<br>avg_dl_rate: " + str(avg_dl_rate) + "<br><br>base stations<br>avg_load %: " + str(
+            avg_load) + "<br>total energy consumption: " + str(network_energy_consumption) + "<br>energy_efficiency: " + str(energy_efficiency)
 
         self.info_text_box_objectives.set_text(objective_text)
         self.info_text_box_objectives.show()

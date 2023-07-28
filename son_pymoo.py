@@ -17,6 +17,8 @@ from son_main_script import Son
 from enum import Enum
 from pymoo.decomposition.asf import ASF
 from pymoo.core.callback import Callback
+from pymoo.operators.crossover.ux import UniformCrossover
+from pymoo.operators.crossover.pntx import SinglePointCrossover, TwoPointCrossover
 
 from pymoo.termination import get_termination
 from multiprocessing.pool import ThreadPool
@@ -41,8 +43,9 @@ class AlgorithmEnum(Enum):
 
 class CrossoverEnum(Enum):
     ONE_POINT_CROSSOVER = "ONE_POINT_CROSSOVER"
-    TWO_POINT_CROSSOVERR = "TWO_POINT_CROSSOVERR"
+    UNIFORM_CROSSOVER = "UNIFORM_CROSSOVER"
     SBX_CROSSOVER = "SBX_CROSSOVER"
+    SON_CROSSOVER = "SON_CROSSOVER"
 
 
 class MutationEnum(Enum):
@@ -117,6 +120,8 @@ class SonProblemElementWise(Problem):
                     objectives = np.append(objectives, current_son.get_avg_overlad())
                 if ObjectiveEnum.POWER_CONSUMPTION.value in self.obj_dict:
                     objectives = np.append(objectives, current_son.get_total_energy_consumption())
+                if ObjectiveEnum.ENERGY_EFFICIENCY.value in self.obj_dict:
+                    objectives = np.append(objectives, -current_son.get_energy_efficiency())
                 if ObjectiveEnum.AVG_SINR.value in self.obj_dict:
                     objectives = np.append(objectives, -current_son.get_average_sinr())
                 if ObjectiveEnum.AVG_DL_RATE.value in self.obj_dict:
@@ -152,10 +157,10 @@ class SonSampling(Sampling):
 
 
 class SonCrossover(Crossover):
-    def __init__(self):
+    def __init__(self, **kwargs):
 
         # define the crossover: number of parents and number of offsprings
-        super().__init__(n_parents=2, n_offsprings=1, prob=0.4)
+        super().__init__(n_parents=2, n_offsprings=1, **kwargs)
 
     def _do(self, problem: SonProblemElementWise, X, **kwargs):
 
@@ -184,7 +189,6 @@ class SonMutation(Mutation):
 
     def _do(self, problem: SonProblemElementWise, X, **kwargs):
         # for each individual
-        # print(problem.users_changed_index_list)
         for k, individual in enumerate(X):
             r = np.random.random()
             # with a probabilty of 30% switch on another random edge
@@ -243,12 +247,18 @@ def start_optimization(
         samplingConfig = IntegerRandomSampling()
     else:
         samplingConfig = SonSampling()
-
     # crossover
+
     if (crossover == CrossoverEnum.SBX_CROSSOVER.value):
         crossoverConfig = SBX(prob=1.0, eta=3, vtype=float, repair=RoundingRepair())
+    elif (crossover == CrossoverEnum.UNIFORM_CROSSOVER.value):
+        crossoverConfig = UniformCrossover(prob=1.0)
+    elif (crossover == CrossoverEnum.ONE_POINT_CROSSOVER.value):
+        crossoverConfig = SinglePointCrossover(prob=1.0)
+    elif (crossover == CrossoverEnum.SON_CROSSOVER.value):
+        crossoverConfig = SonCrossover(prob=1.0)
     else:
-        crossoverConfig = SonCrossover()
+        crossoverConfig = SonCrossover(prob=1.0)
 
     # mutation
     if (mutation == MutationEnum.PM_MUTATION.value):
@@ -287,34 +297,43 @@ def start_optimization(
     # start computatoin with  termination criteria
 
     result = minimize(sonProblem, pymooAlgorithm,
-                      termination=termination_obj, seed=1, verbose=True)
+                      termination=termination_obj, seed=1, verbose=True, save_history=True)
     # sonProblem.pool.close()
 
     decisionSpace = result.X
     objectiveSpace = result.F
-    print(objectiveSpace)
-    print(decisionSpace)
-    print(result.exec_time)
+    n_evals_list = []             # corresponding number of function evaluations\
+    hist_F = []              # the objective space values in each generation
+    hist_cv = []             # constraint violation in each generation
+    hist_cv_avg = []         # average constraint violation in the whole population
 
-    # convert encoding (decisionspace results) back to  binary encoding
-    # converted_encoding: list[list[str]] = []
-    # for _, x in enumerate(decisionSpace):
-    #     x_binary_str_list: list[str] = []
-    #     for active_edge_cell_pos_index, active_edge_cell_pos in enumerate(x):
-    #         encoding = ""
-    #         for i in range(int(sonProblem.xu[active_edge_cell_pos_index])):
-    #             encoding += "1" if i+1 == active_edge_cell_pos else "0"
-    #         x_binary_str_list.append(encoding)
-    #     converted_encoding.append(x_binary_str_list)
+    for algo in result.history:
+        # store the number of function evaluations
+        n_evals_list.append(algo.evaluator.n_eval)
 
-    # save encoding to excel
-    sonProblem.son_original.save_edge_activation_profile_to_file(
-        decisionSpace, result_file_name=folder_path + "_encoding.xlsx",
-        result_sheet_name="encoding")
+        # retrieve the optimum from the algorithm
+        opt = algo.opt
+
+        # store the least contraint violation and the average in each population
+        hist_cv.append(opt.get("CV").min())
+        hist_cv_avg.append(algo.pop.get("CV").mean())
+
+        # filter out only the feasible and append and objective space values
+        feas = np.where(opt.get("feasible"))[0]
+        hist_F.append(opt.get("F")[feas].tolist())
+
     # save all result individuums as json and create objective result dict
     objective_result_dic = {
         "optimization_objectives": objectives,
-        "results": []}
+        "results": [],
+        "decisionSpace": decisionSpace.tolist(),
+        "objectiveSpace": objectiveSpace.tolist(),
+        "history": {
+            "n_evals": n_evals_list,
+            "objective_space_opt": hist_F,
+            "hist_cv": hist_cv,
+            "hist_cv_avg": hist_cv_avg
+        }}
 
     for i, individuum in enumerate(decisionSpace):
         sonProblem.son_original.apply_edge_activation_encoding_to_graph(individuum)
@@ -325,6 +344,7 @@ def start_optimization(
               ObjectiveEnum.AVG_RSSI.name: sonProblem.son_original.get_average_rssi(),
               ObjectiveEnum.AVG_LOAD.name: sonProblem.son_original.get_average_network_load(),
               ObjectiveEnum.POWER_CONSUMPTION.name: sonProblem.son_original.get_total_energy_consumption(),
+              ObjectiveEnum.ENERGY_EFFICIENCY.name: sonProblem.son_original.get_energy_efficiency(),
               ObjectiveEnum.AVG_DL_RATE.name: sonProblem.son_original.get_average_dl_datarate()}))
         sonProblem.son_original.save_json_adjacency_graph_to_file(
             filename=folder_path + "ind_result_" + str(i + 1) + ".json")
@@ -337,60 +357,6 @@ def start_optimization(
     file_path = folder_path + "objectives_result.json"
     with open(file_path, 'w', encoding="utf-8") as file:
         file.write(json_data)
-
-# Augmented Scalarization Function (ASF)
-
-# decomp = ASF()
-
-# order or weights, len must match number of objectives => [load, overload, power_consumption, sinr]
-
-# weights_1_0 = np.array([0.5, 0.5])
-# weights_0_1 = np.array([0, 1])
-
-# picks_list_1_0: list[list[int]] = []
-# picks_list_0_1: list[list[int]] = []
-
-
-# sonProblem = SonProblemElementWise(obj_dict=[ObjectiveEnum.AVG_LOAD, ObjectiveEnum.AVG_SINR])
-# results = minimize(sonProblem, sonAlgorithm_NSGA2_1,
-#                    termination=("n_gen", 300), seed=1, verbose=True)
-
-# select one result for current hour and push in result array
-
-# decisionSpace = results.X
-# objectiveSpace = results.F
-
-# normalize objective space
-
-# ideal = objectiveSpace.min(axis=0)
-# nadir = objectiveSpace.max(axis=0)
-
-# nF = (objectiveSpace - ideal) / (nadir - ideal)
-
-# index_objectiveSpace_1_0 = decomp.do(nF, 1/weights_1_0).argmin()
-# index_objectiveSpace_0_1 = decomp.do(nF, 1/weights_0_1).argmin()
-
-# picks_list_1_0.append(decisionSpace[index_objectiveSpace_1_0])
-# picks_list_0_1.append(decisionSpace[index_objectiveSpace_0_1])
-
-# plt.figure(figsize=(7, 5))
-# plt.scatter(nF[:, 0], nF[:, 1], s=30, facecolors='none', edgecolors='blue')
-# plt.scatter(
-#     nF[index_objectiveSpace_1_0, 0],
-#     nF[index_objectiveSpace_1_0, 1],
-#     marker="x", color="red", s=200)
-# plt.title("Objective Space normalized")
-
-# plt.figure(figsize=(7, 5))
-# plt.scatter(objectiveSpace[:, 0], objectiveSpace[:, 1],
-#             s=30, facecolors='none', edgecolors='blue')
-# plt.scatter(
-#     objectiveSpace[index_objectiveSpace_1_0, 0],
-#     objectiveSpace[index_objectiveSpace_1_0, 1],
-#     marker="x", color="red", s=200)
-# plt.title("Objective Space")
-
-# plt.show()
 
 
 if __name__ == "__main__":

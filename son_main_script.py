@@ -254,6 +254,7 @@ class Son:
                 # calculation for inactive users
                 bs_node[1]["active"] = False
                 self.graph.nodes[bs_node[0]]["total_power"] = 0
+                self.graph.nodes[bs_node[0]]["energy_efficiency"] = 0
                 bs_node[1]["traffic"] = 0
                 bs_node[1]["load"] = 0
             else:
@@ -274,6 +275,7 @@ class Son:
                                                                         ["type"]]["antennas"]if traffic_sum > 0 else 0
             # calculate total power consumption for bs -> call only after traffic and load estimations are done
             bs_node[1]["total_power"] = self.get_total_bs_power(bs_node[0])
+            bs_node[1]["energy_efficiency"] = self.get_energy_efficiency_bs(bs_node[0])
 
     def update_user_node_attributes(self):
         """ update dynamic user_node attributes depending on active edge (sinr, rssi)
@@ -416,6 +418,21 @@ class Son:
         total_power = fix_power + transmission_chain_power + encoding_decoding_power
 
         return round(total_power, 4)
+
+    def get_energy_efficiency_bs(self, bs_node_id: str):
+        if self.graph.nodes.data()[bs_node_id]["active"] == False:
+            return 0
+        bs_total_power_consumption = self.graph.nodes.data()[bs_node_id]["total_power"]
+
+        user_dl_datarate_sum = 0
+        count = 0
+
+        for _, edge in enumerate(self.graph[bs_node_id].items()):
+            if edge[1]["active"]:
+                count += 1
+                user_dl_datarate_sum += self.graph.nodes[edge[0]]["dl_datarate"]
+
+        return round(user_dl_datarate_sum / bs_total_power_consumption, 4)
 
     def get_sinr(self, cell_id: str):
 
@@ -562,6 +579,23 @@ class Son:
             energy_consumption += bs_node[1]["total_power"]
 
         return round(energy_consumption, 4)
+
+    def get_energy_efficiency(self):
+        """get energy efficiency of base stations, including dynamic and static power consumption
+
+        Returns:
+           energy efficiency of base stations
+        """
+        efficiency_sum = 0
+        count = 0
+        for _, bs_node in enumerate(filter(self.filter_active_bs_nodes, self.graph.nodes.data())):
+            efficiency_sum += bs_node[1]["energy_efficiency"]
+            count += 1
+        if count == 0:
+            return 0
+        if count == 0:
+            return 0
+        return round(efficiency_sum / count, 4)
 
     def get_average_sinr(self):
         """get average sinr over all cells
