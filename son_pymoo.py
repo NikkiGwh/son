@@ -1,8 +1,11 @@
 import json
+import multiprocessing
 from typing_extensions import runtime
 import numpy as np
+from pandas import MultiIndex
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.algorithms.moo.nsga3 import NSGA3
+from pymoo.algorithms.base.genetic import GeneticAlgorithm
 from pymoo.core.problem import ElementwiseProblem
 from pymoo.optimize import minimize
 from pymoo.util.ref_dirs import get_reference_directions
@@ -23,9 +26,6 @@ from pymoo.operators.crossover.ux import UniformCrossover
 from pymoo.operators.crossover.pntx import SinglePointCrossover, TwoPointCrossover
 
 from pymoo.termination import get_termination
-from multiprocessing.pool import ThreadPool
-import threading
-import copy
 
 
 class ObjectiveEnum(Enum):
@@ -52,6 +52,7 @@ class CrossoverEnum(Enum):
 
 class MutationEnum(Enum):
     RANDOM_FLIP = "RANDOM_FLIP"
+    BIT_FLIP = "BIT_FLIP"
     SMALL_BS_FLIP = "SMALL_BS_FLIP"
     BIG_BS_FLIP = "BIG_BS_FLIP"
     PM_MUTATION = "PM_MUTATION"
@@ -70,7 +71,6 @@ class SonProblemElementWise(ElementwiseProblem):
         # self.users_changed_index_list: list[int] = []
         # prepare network
         self.son_original = son
-
         self.obj_dict = obj_dict
         n_var = len(
             list(filter(self.son_original.filter_user_nodes, self.son_original.graph.nodes.data())))
@@ -115,6 +115,32 @@ class SonSampling(Sampling):
             for j in range(problem.n_var):
                 X[i][j] = np.random.randint(problem.xl[j], problem.xu[j]+1)
         return X
+
+
+class SeedSampling(Sampling):
+    def __init__(self, seed_pop) -> None:
+        self.seed_pop = seed_pop
+        super().__init__()
+
+    def _do(self, problem: SonProblemElementWise, n_samples, **kwargs):
+        X = np.empty((n_samples, problem.n_var), int)
+        for i in range(n_samples):
+
+            for j in range(problem.n_var):
+                if self.seed_pop[i][j] > problem.xu[j] or self.seed_pop[i][j] < problem.xl[j]:
+                    X[i][j] = np.random.randint(problem.xl[j], problem.xu[j]+1)
+                else:
+                    X[i][j] = self.seed_pop[i][j]
+        return X
+
+
+class SeedSampling2(Sampling):
+    def __init__(self, seed_pop) -> None:
+        self.seed_pop = seed_pop
+        super().__init__()
+
+    def _do(self, problem: SonProblemElementWise, n_samples, **kwargs):
+        return self.seed_pop
 
 
 class SonCrossover(Crossover):
@@ -170,14 +196,26 @@ class SonDublicateElimination(ElementwiseDuplicateElimination):
 
 class MyCallback(Callback):
 
-    def __init__(self) -> None:
+    def __init__(self, pymoo_message_queue: multiprocessing.Queue,
+                 editor_message_queue: multiprocessing.Queue, son: Son) -> None:
         super().__init__()
-        self.data["best"] = []
-        self.user_list = []
+        self.data["external_termination"] = False
+        self.data["son"] = son
+        self.pymoo_message_queue = pymoo_message_queue
+        self.editor_message_queue = editor_message_queue
 
-    def notify(self, algorithm):
-        self.data["best"].append(algorithm.pop.get("F").min())
-        algorithm.problem.users_changed_index_list.append(algorithm.n_gen)
+    def notify(self, algorithm: GeneticAlgorithm):
+        # read editor message queue
+        while self.editor_message_queue.empty() is False:
+            callback_obj = self.editor_message_queue.get()
+            self.data["son"] = callback_obj["son"]
+            if callback_obj["terminate"] == True:
+                self.data["external_termination"] = True
+                algorithm.termination.terminate()
+
+        # write to pymoo message queue
+
+        # self.pymoo_message_queue.put({"n_gen": algorithm.n_gen})
 
 ################################ main ###################
 # TODO add weigthing parameters for objectives with augumented scalarization function
@@ -197,8 +235,10 @@ def start_optimization(
         algorithm: str,
         son_obj: Son,
         folder_path: str,
+        pymoo_message_queue: multiprocessing.Queue,
+        editor_message_queue: multiprocessing.Queue,
         prob_mutation: float = 0.3,
-        prob_crossover: float = 0.3):
+        prob_crossover: float = 0.9):
 
     pymooAlgorithm = None
     samplingConfig = None
@@ -207,11 +247,11 @@ def start_optimization(
 
     # sampling
     if (sampling == SamplingEnum.RANDOM_SAMPLING.value):
-        samplingConfig = IntegerRandomSampling()
+        samplingConfig = SonSampling()
     else:
         samplingConfig = SonSampling()
-    # crossover
 
+    # crossover
     if (crossover == CrossoverEnum.SBX_CROSSOVER.value):
         crossoverConfig = SBX(prob=prob_crossover, eta=3, vtype=float, repair=RoundingRepair())
     elif (crossover == CrossoverEnum.UNIFORM_CROSSOVER.value):
@@ -227,7 +267,7 @@ def start_optimization(
     if (mutation == MutationEnum.PM_MUTATION.value):
         mutationConfig = PolynomialMutation(
             prob=prob_mutation, eta=3, vtype=float, repair=RoundingRepair())
-    elif (mutation == MutationEnum.RANDOM_FLIP):
+    elif (mutation == MutationEnum.BIT_FLIP):
         mutationConfig = BitflipMutation(prob=prob_mutation, prob_var=0.3)
     else:
         mutationConfig = SonMutation()
@@ -262,15 +302,51 @@ def start_optimization(
     termination_obj = get_termination("n_gen", n_generations)
     # start computatoin with  termination criteria
 
-    result = minimize(sonProblem, pymooAlgorithm,
-                      termination=termination_obj, seed=1, verbose=True, save_history=True)
-    # sonProblem.pool.close()
+    result = minimize(
+        sonProblem, pymooAlgorithm, termination=termination_obj, seed=1, verbose=True,
+        save_history=True,
+        callback=MyCallback(
+            pymoo_message_queue=pymoo_message_queue, editor_message_queue=editor_message_queue,
+            son=son_obj))
+
+    while result.algorithm.callback.data["external_termination"]:
+
+        # reinitialize algorithm config
+        sonProblem = SonProblemElementWise(
+            obj_dict=objectives, son=result.algorithm.callback.data["son"])
+        samplingConfig = SeedSampling(seed_pop=result.pop.get("X"))
+
+        if (algorithm == AlgorithmEnum.NSGA3.value):
+            # create the reference directions to be used for the optimization in NSGA3
+            ref_dirs = get_reference_directions("uniform", len(objectives), n_partitions=12)
+            pymooAlgorithm = NSGA3(pop_size=pop_size,
+                                   sampling=samplingConfig,
+                                   crossover=crossoverConfig,
+                                   mutation=mutationConfig,
+                                   n_offsprings=n_offsprings,
+                                   eliminate_duplicates=eliminate_duplicates,
+                                   n_generations=n_generations,
+                                   ref_dirs=ref_dirs)
+        else:
+            pymooAlgorithm = NSGA2(pop_size=pop_size,
+                                   n_offsprings=n_offsprings,
+                                   sampling=samplingConfig,
+                                   crossover=crossoverConfig,
+                                   mutation=mutationConfig,
+                                   eliminate_duplicates=eliminate_duplicates,
+                                   n_generations=n_generations)
+        result = minimize(
+            sonProblem, pymooAlgorithm, termination=termination_obj, seed=1, verbose=True,
+            save_history=True,
+            callback=MyCallback(
+                pymoo_message_queue=pymoo_message_queue, editor_message_queue=editor_message_queue,
+                son=result.algorithm.callback.data["son"]))
 
     decisionSpace = result.X
     objectiveSpace = result.F
     exec_time = result.exec_time
+    print("------- execution time in ms ------")
     print(exec_time)
-
     n_evals_list = []             # corresponding number of function evaluations\
     hist_F = []              # the objective space values in each generation
     hist_cv = []             # constraint violation in each generation
@@ -326,6 +402,8 @@ def start_optimization(
     file_path = folder_path + "objectives_result.json"
     with open(file_path, 'w', encoding="utf-8") as file:
         file.write(json_data)
+
+    pymoo_message_queue.put("finished")
 
 
 if __name__ == "__main__":

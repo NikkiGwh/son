@@ -12,6 +12,7 @@ from son_main_script import BaseStationOrder, BinPackingType, CellOrderTwo, Son
 import pygame_gui
 import re
 import os
+import multiprocessing
 
 from son_pymoo import AlgorithmEnum, CrossoverEnum, MutationEnum, ObjectiveEnum, SamplingEnum, start_optimization
 
@@ -24,11 +25,11 @@ default_algorithm_param_config = {
     "n_offsprings": 20,
     "n_generations": 10,
     "termination": "",
-    "sampling": SamplingEnum.BIG_BS_FIRST_SAMPLING.value,
-    "crossover": CrossoverEnum.ONE_POINT_CROSSOVER.value,
-    "mutation": MutationEnum.RANDOM_FLIP.value,
+    "sampling": SamplingEnum.RANDOM_SAMPLING.value,
+    "crossover": CrossoverEnum.UNIFORM_CROSSOVER.value,
+    "mutation": MutationEnum.PM_MUTATION.value,
     "eliminate_duplicates": "True",
-    "objectives": [ObjectiveEnum.AVG_DL_RATE.value, ObjectiveEnum.AVG_LOAD.value],
+    "objectives": [ObjectiveEnum.AVG_DL_RATE.value, ObjectiveEnum.ENERGY_EFFICIENCY.value],
     "algorithm": AlgorithmEnum.NSGA2.value,
 }
 
@@ -51,6 +52,8 @@ class Main():
     def __init__(self, graph: Son) -> None:
         pygame.init()
         self.selected_node_id = None
+        self.pymoo_message_queue = multiprocessing.Queue()
+        self.editor_message_queue = multiprocessing.Queue()
         self.right_mouse_action = dropdown_menue_options_list[0]
         self.network_folder_name_list = get_network_folder_names()
         self.display_surface = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
@@ -665,9 +668,11 @@ class Main():
                 str(self.network_params_dic[self.right_mouse_action]["wave_length"]))
 
     def start_bin_packing(self):
-        self.son.find_activation_profile_bin_packing(
-            CellOrderTwo.LOWEST_DEGREE_FIRST, bs_order=[BaseStationOrder.MACRO_FIRST],
-            bin_packing=BinPackingType.BEST_FIT)
+        # TODO uncomment and create new method for this
+        # self.son.find_activation_profile_bin_packing(
+        #     CellOrderTwo.LOWEST_DEGREE_FIRST, bs_order=[BaseStationOrder.MACRO_FIRST],
+        #     bin_packing=BinPackingType.BEST_FIT)
+        self.editor_message_queue.put({"terminate": True, "son": self.son})
 
     def start_evo(self):
 
@@ -684,40 +689,63 @@ class Main():
             with open("datastore/" + self.dropdown_menu_pick_network.selected_option + "/algorithm_config_" +
                       str(result_directory_count) + "/algorithm_config_" + str(result_directory_count) + ".json", "w+", encoding="utf-8") as outfile:
                 json.dump(self.algorithm_param_dic, outfile)
+            # TODO uncomment if returning to sequential execution
+            # start_optimization(
+            #     pop_size=int(self.algorithm_param_dic["pop_size"]),
+            #     n_offsprings=int(self.algorithm_param_dic["n_offsprings"]),
+            #     n_generations=int(self.algorithm_param_dic["n_generations"]),
+            #     sampling=self.algorithm_param_dic["sampling"],
+            #     crossover=self.algorithm_param_dic["crossover"],
+            #     mutation=self.algorithm_param_dic["mutation"],
+            #     eliminate_duplicates=self.algorithm_param_dic["eliminate_duplicates"] == "True",
+            #     objectives=self.algorithm_param_dic["objectives"],
+            #     termination=self.algorithm_param_dic["termination"],
+            #     algorithm=self.algorithm_param_dic["algorithm"],
+            #     folder_path="datastore/" + self.dropdown_menu_pick_network.selected_option +
+            #     "/algorithm_config_" + str(result_directory_count) + "/",
+            #     son_obj=self.son)
 
-            start_optimization(
-                pop_size=int(self.algorithm_param_dic["pop_size"]),
-                n_offsprings=int(self.algorithm_param_dic["n_offsprings"]),
-                n_generations=int(self.algorithm_param_dic["n_generations"]),
-                sampling=self.algorithm_param_dic["sampling"],
-                crossover=self.algorithm_param_dic["crossover"],
-                mutation=self.algorithm_param_dic["mutation"],
-                eliminate_duplicates=self.algorithm_param_dic["eliminate_duplicates"] == "True",
-                objectives=self.algorithm_param_dic["objectives"],
-                termination=self.algorithm_param_dic["termination"],
-                algorithm=self.algorithm_param_dic["algorithm"],
-                folder_path="datastore/" + self.dropdown_menu_pick_network.selected_option +
+            optimization_process = multiprocessing.Process(target=start_optimization, args=(
+                int(self.algorithm_param_dic["pop_size"]),
+                int(self.algorithm_param_dic["n_offsprings"]),
+                int(self.algorithm_param_dic["n_generations"]),
+                "",
+                self.algorithm_param_dic["sampling"],
+                self.algorithm_param_dic["crossover"],
+                self.algorithm_param_dic["mutation"],
+                self.algorithm_param_dic["eliminate_duplicates"] == "True",
+                self.algorithm_param_dic["objectives"],
+                self.algorithm_param_dic["algorithm"],
+                self.son,
+                "datastore/" + self.dropdown_menu_pick_network.selected_option +
                 "/algorithm_config_" + str(result_directory_count) + "/",
-                son_obj=self.son)
+                self.pymoo_message_queue,
+                self.editor_message_queue,
+                0.3,
+                0.3
+            ))
+            optimization_process.start()
 
-            # update algo param config dropdown
-            self.dropdown_pick_algo_config.kill()
-            self.dropdown_pick_algo_config = pygame_gui.elements.UIDropDownMenu(
-                options_list=self.get_configs_for_current_network(),
-                starting_option=self.get_configs_for_current_network()[-1],
-                relative_rect=pygame.Rect((20, 590), (200, 30)),
-                manager=self.manager,
-                container=self.ui_container,
-            )
-            # update reults dropdown dropdown
-            self.dropdown_pick_result.kill()
-            self.dropdown_pick_result = pygame_gui.elements.UIDropDownMenu(
-                options_list=self.get_results_for_current_config(),
-                starting_option=self.get_results_for_current_config()[0],
-                relative_rect=pygame.Rect((20, 620), (200, 30)),
-                manager=self.manager,
-                container=self.ui_container,
-            )
+            # TODO uncomment if returning to sequential processing
+
+            # # update algo param config dropdown
+            # self.dropdown_pick_algo_config.kill()
+            # self.dropdown_pick_algo_config = pygame_gui.elements.UIDropDownMenu(
+            #     options_list=self.get_configs_for_current_network(),
+            #     starting_option=self.get_configs_for_current_network()[-1],
+            #     relative_rect=pygame.Rect((20, 590), (200, 30)),
+            #     manager=self.manager,
+            #     container=self.ui_container,
+            # )
+            # # update reults dropdown dropdown
+            # self.dropdown_pick_result.kill()
+            # self.dropdown_pick_result = pygame_gui.elements.UIDropDownMenu(
+            #     options_list=self.get_results_for_current_config(),
+            #     starting_option=self.get_results_for_current_config()[0],
+            #     relative_rect=pygame.Rect((20, 620), (200, 30)),
+            #     manager=self.manager,
+            #     container=self.ui_container,
+            # )
         else:
             self.popup.kill()
             self.popup = CustomConfirmationDialog(
@@ -728,7 +756,28 @@ class Main():
                 action_short_name="ok",
                 action_long_desc="press save first to create required target folder",
                 visible=True,
+
             )
+
+    def on_optimization_finished(self):
+        # update algo param config dropdown
+        self.dropdown_pick_algo_config.kill()
+        self.dropdown_pick_algo_config = pygame_gui.elements.UIDropDownMenu(
+            options_list=self.get_configs_for_current_network(),
+            starting_option=self.get_configs_for_current_network()[-1],
+            relative_rect=pygame.Rect((20, 590), (200, 30)),
+            manager=self.manager,
+            container=self.ui_container,
+        )
+        # update reults dropdown dropdown
+        self.dropdown_pick_result.kill()
+        self.dropdown_pick_result = pygame_gui.elements.UIDropDownMenu(
+            options_list=self.get_results_for_current_config(),
+            starting_option=self.get_results_for_current_config()[0],
+            relative_rect=pygame.Rect((20, 620), (200, 30)),
+            manager=self.manager,
+            container=self.ui_container,
+        )
 
     def save_current_network(self):
 
@@ -781,6 +830,15 @@ class Main():
             # set time per tick
             dt = self.clock.tick(60)/1000
 
+            # read message queue
+            while self.pymoo_message_queue.empty() is False:
+                callback_obj = self.pymoo_message_queue.get()
+                if callback_obj == "finished":
+                    self.on_optimization_finished()
+                else:
+                    ()
+                   # print(callback_obj)
+
             # handle events
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -802,12 +860,6 @@ class Main():
                 if event.type == pygame.MOUSEBUTTONUP:
                     if self.background.get_rect().collidepoint(event.pos):
                         self.selected_node_id = None
-
-                # if event.type == pygame.KEYDOWN:
-                    # print(event.key)
-                    # print(event.unicode)
-                    # print(pygame.K_c)
-                # print("----")
 
                 # GIU events
                 if event.type == pygame_gui.UI_BUTTON_PRESSED:
