@@ -1,16 +1,18 @@
 import json
+from typing_extensions import runtime
 import numpy as np
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.algorithms.moo.nsga3 import NSGA3
-from pymoo.core.problem import Problem
+from pymoo.core.problem import ElementwiseProblem
 from pymoo.optimize import minimize
 from pymoo.util.ref_dirs import get_reference_directions
 from pymoo.core.sampling import Sampling
 from pymoo.core.crossover import Crossover
 from pymoo.core.mutation import Mutation
+from pymoo.operators.mutation.bitflip import BitflipMutation
 from pymoo.core.duplicate import ElementwiseDuplicateElimination
 from pymoo.operators.crossover.sbx import SBX
-from pymoo.operators.mutation.pm import PM
+from pymoo.operators.mutation.pm import PolynomialMutation
 from pymoo.operators.repair.rounding import RoundingRepair
 from pymoo.operators.sampling.rnd import IntegerRandomSampling
 from son_main_script import Son
@@ -62,26 +64,16 @@ class SamplingEnum(Enum):
     HIGH_RSSI_FIRST_SAMPLING = "HIGH_RSSI_FIRST_SAMPLING"
 
 
-class SonProblemElementWise(Problem):
+class SonProblemElementWise(ElementwiseProblem):
     def __init__(self, obj_dict: list[str], son: Son):
         # prepara flags
         # self.users_changed_index_list: list[int] = []
         # prepare network
         self.son_original = son
 
-        # self.son1 = copy.deepcopy(son)
-        # self.son2 = copy.deepcopy(son)
-        # self.son3 = copy.deepcopy(son)
-        # self.son4 = copy.deepcopy(son)
-        # self.son5 = copy.deepcopy(son)
-        # self.n_threads = 1
-        # self.pool = ThreadPool(self.n_threads)
-
         self.obj_dict = obj_dict
         n_var = len(
-            list(
-                filter(
-                    self.son_original.filter_user_nodes, self.son_original.graph.nodes.data())))
+            list(filter(self.son_original.filter_user_nodes, self.son_original.graph.nodes.data())))
 
         # prepare problem parameter
         binary_activation_profile_encoding = self.son_original.get_edge_activation_encoding_from_graph()
@@ -93,57 +85,26 @@ class SonProblemElementWise(Problem):
         super().__init__(n_var=n_var, n_obj=len(obj_dict), xl=np.full_like(xu, 1), xu=xu)
 
     def _evaluate(self, x, out, *args, **kwargs):
+        self.son_original.apply_edge_activation_encoding_to_graph(x)
+        # prepare objectives
+        objectives = np.array([])
 
-        def my_eval(x_i):
-            # current_thread = threading.current_thread()
+        if ObjectiveEnum.AVG_LOAD.value in self.obj_dict:
+            objectives = np.append(objectives, self.son_original.get_average_network_load())
+        if ObjectiveEnum.OVERLOAD.value in self.obj_dict:
+            objectives = np.append(objectives, self.son_original.get_avg_overlad())
+        if ObjectiveEnum.POWER_CONSUMPTION.value in self.obj_dict:
+            objectives = np.append(objectives, self.son_original.get_total_energy_consumption())
+        if ObjectiveEnum.ENERGY_EFFICIENCY.value in self.obj_dict:
+            objectives = np.append(objectives, -self.son_original.get_energy_efficiency())
+        if ObjectiveEnum.AVG_SINR.value in self.obj_dict:
+            objectives = np.append(objectives, -self.son_original.get_average_sinr())
+        if ObjectiveEnum.AVG_DL_RATE.value in self.obj_dict:
+            objectives = np.append(objectives, -self.son_original.get_average_dl_datarate())
+        if ObjectiveEnum.AVG_RSSI.value in self.obj_dict:
+            objectives = np.append(objectives, -self.son_original.get_average_rssi())
 
-            # if current_thread.name == "Thread-6 (worker)":
-            #     current_son = self.son1
-            # if current_thread.name == "Thread-7 (worker)":
-            #     current_son = self.son2
-            # if current_thread.name == "Thread-8 (worker)":
-            #     current_son = self.son3
-            # if current_thread.name == "Thread-9 (worker)":
-            #     current_son = self.son4
-            # if current_thread.name == "Thread-10 (worker)":
-            #     current_son = self.son5
-            current_son = copy.deepcopy(self.son_original)
-            # prepare objectives
-            objectives = np.array([])
-
-            if current_son is not None:
-                current_son.apply_edge_activation_encoding_to_graph(x_i)
-
-                if ObjectiveEnum.AVG_LOAD.value in self.obj_dict:
-                    objectives = np.append(objectives, current_son.get_average_network_load())
-                if ObjectiveEnum.OVERLOAD.value in self.obj_dict:
-                    objectives = np.append(objectives, current_son.get_avg_overlad())
-                if ObjectiveEnum.POWER_CONSUMPTION.value in self.obj_dict:
-                    objectives = np.append(objectives, current_son.get_total_energy_consumption())
-                if ObjectiveEnum.ENERGY_EFFICIENCY.value in self.obj_dict:
-                    objectives = np.append(objectives, -current_son.get_energy_efficiency())
-                if ObjectiveEnum.AVG_SINR.value in self.obj_dict:
-                    objectives = np.append(objectives, -current_son.get_average_sinr())
-                if ObjectiveEnum.AVG_DL_RATE.value in self.obj_dict:
-                    objectives = np.append(objectives, -current_son.get_average_dl_datarate())
-                if ObjectiveEnum.AVG_RSSI.value in self.obj_dict:
-                    objectives = np.append(objectives, -current_son.get_average_rssi())
-            else:
-                print("#####no#######")
-            return objectives
-
-        n_threads = 1
-        with ThreadPool(n_threads) as pool:
-            # prepare the parameters for the pool
-            parameter_tuple_list = [[x[k]] for k in range(len(x))]
-            F = pool.starmap(my_eval, parameter_tuple_list,
-                             chunksize=len(x) // n_threads)
-
-            out["F"] = np.array(F)
-
-        # parameter_tuple_list = [[x[k]] for k in range(len(x))]
-        # F = self.pool.starmap(my_eval, parameter_tuple_list, chunksize=len(x) // self.n_threads)
-        # out["F"] = np.array(F)
+        out["F"] = np.array(objectives)
 
 
 class SonSampling(Sampling):
@@ -235,7 +196,9 @@ def start_optimization(
         objectives: list[str],
         algorithm: str,
         son_obj: Son,
-        folder_path: str):
+        folder_path: str,
+        prob_mutation: float = 0.3,
+        prob_crossover: float = 0.3):
 
     pymooAlgorithm = None
     samplingConfig = None
@@ -250,25 +213,28 @@ def start_optimization(
     # crossover
 
     if (crossover == CrossoverEnum.SBX_CROSSOVER.value):
-        crossoverConfig = SBX(prob=1.0, eta=3, vtype=float, repair=RoundingRepair())
+        crossoverConfig = SBX(prob=prob_crossover, eta=3, vtype=float, repair=RoundingRepair())
     elif (crossover == CrossoverEnum.UNIFORM_CROSSOVER.value):
-        crossoverConfig = UniformCrossover(prob=1.0)
+        crossoverConfig = UniformCrossover(prob=prob_crossover)
     elif (crossover == CrossoverEnum.ONE_POINT_CROSSOVER.value):
-        crossoverConfig = SinglePointCrossover(prob=1.0)
+        crossoverConfig = SinglePointCrossover(prob=prob_crossover)
     elif (crossover == CrossoverEnum.SON_CROSSOVER.value):
-        crossoverConfig = SonCrossover(prob=1.0)
+        crossoverConfig = SonCrossover(prob=prob_crossover)
     else:
-        crossoverConfig = SonCrossover(prob=1.0)
+        crossoverConfig = SonCrossover(prob=prob_crossover)
 
     # mutation
     if (mutation == MutationEnum.PM_MUTATION.value):
-        mutationConfig = PM(prob=1.0, eta=3, vtype=float, repair=RoundingRepair())
+        mutationConfig = PolynomialMutation(
+            prob=prob_mutation, eta=3, vtype=float, repair=RoundingRepair())
+    elif (mutation == MutationEnum.RANDOM_FLIP):
+        mutationConfig = BitflipMutation(prob=prob_mutation, prob_var=0.3)
     else:
         mutationConfig = SonMutation()
 
     # algorithm config
     if (algorithm == AlgorithmEnum.NSGA3.value):
-        # create the reference directions to be used for the optimization
+        # create the reference directions to be used for the optimization in NSGA3
         ref_dirs = get_reference_directions("uniform", len(objectives), n_partitions=12)
         pymooAlgorithm = NSGA3(pop_size=pop_size,
                                sampling=samplingConfig,
@@ -302,6 +268,9 @@ def start_optimization(
 
     decisionSpace = result.X
     objectiveSpace = result.F
+    exec_time = result.exec_time
+    print(exec_time)
+
     n_evals_list = []             # corresponding number of function evaluations\
     hist_F = []              # the objective space values in each generation
     hist_cv = []             # constraint violation in each generation

@@ -240,7 +240,7 @@ class Son:
 
     def update_bs_node_attributes(self):
         """update dynamic bs_node attributes (traffic, total_power, active)
-        also deactivate bs stations which don't have active edges
+        also deactivate (standby) bs stations which don't have active edges
         """
         # deactivate bs stations which don't have active edges
         # set traffic, total_power to 0 for inactive bs nodes
@@ -253,8 +253,10 @@ class Son:
             if len(connected_users) == 0:
                 # calculation for inactive users
                 bs_node[1]["active"] = False
-                self.graph.nodes[bs_node[0]]["total_power"] = 0
-                self.graph.nodes[bs_node[0]]["energy_efficiency"] = 0
+                # TODO change
+                self.graph.nodes[bs_node[0]]["total_power"] = self.network_node_params[bs_node[1][
+                    "type"]]["standby_power"]
+               # self.graph.nodes[bs_node[0]]["energy_efficiency"] = 0
                 bs_node[1]["traffic"] = 0
                 bs_node[1]["load"] = 0
             else:
@@ -275,7 +277,7 @@ class Son:
                                                                         ["type"]]["antennas"]if traffic_sum > 0 else 0
             # calculate total power consumption for bs -> call only after traffic and load estimations are done
             bs_node[1]["total_power"] = self.get_total_bs_power(bs_node[0])
-            bs_node[1]["energy_efficiency"] = self.get_energy_efficiency_bs(bs_node[0])
+            # bs_node[1]["energy_efficiency"] = self.get_energy_efficiency_bs(bs_node[0])
 
     def update_user_node_attributes(self):
         """ update dynamic user_node attributes depending on active edge (sinr, rssi)
@@ -581,21 +583,32 @@ class Son:
         return round(energy_consumption, 4)
 
     def get_energy_efficiency(self):
-        """get energy efficiency of base stations, including dynamic and static power consumption
+        """get energy efficiency of all base stations, including dynamic, static and standby power consumption
 
         Returns:
            energy efficiency of base stations
         """
-        efficiency_sum = 0
+        # efficiency_sum = 0
+        # count = 0
+        # for _, bs_node in enumerate(filter(self.filter_bs_nodes, self.graph.nodes.data())):
+        #     efficiency_sum += bs_node[1]["energy_efficiency"]
+        #     count += 1
+        # if count == 0:
+        #     return 0
+        # return round(efficiency_sum / count, 4)
+        dl_rate_sum = 0
+        power_consumption_sum = 0
         count = 0
-        for _, bs_node in enumerate(filter(self.filter_active_bs_nodes, self.graph.nodes.data())):
-            efficiency_sum += bs_node[1]["energy_efficiency"]
+        for _, bs_node in enumerate(filter(self.filter_bs_nodes, self.graph.nodes.data())):
+            power_consumption_sum += bs_node[1]["total_power"]
             count += 1
-        if count == 0:
+
+        for _, user_node in enumerate(filter(self.filter_user_nodes, self.graph.nodes.data())):
+            dl_rate_sum += user_node[1]["dl_datarate"]
+
+        if dl_rate_sum <= 0 or power_consumption_sum <= 0:
             return 0
-        if count == 0:
-            return 0
-        return round(efficiency_sum / count, 4)
+        return round(dl_rate_sum / power_consumption_sum, 4)
 
     def get_average_sinr(self):
         """get average sinr over all cells
