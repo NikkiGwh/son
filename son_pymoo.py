@@ -311,6 +311,8 @@ def start_optimization(
 
     while result.algorithm.callback.data["external_termination"]:
 
+        pymoo_message_queue.put({"decision_space": result.X, "objective_space": result.F, "finished": False})
+
         # reinitialize algorithm config
         sonProblem = SonProblemElementWise(
             obj_dict=objectives, son=result.algorithm.callback.data["son"])
@@ -403,7 +405,7 @@ def start_optimization(
     with open(file_path, 'w', encoding="utf-8") as file:
         file.write(json_data)
 
-    pymoo_message_queue.put("finished")
+    pymoo_message_queue.put({"finished": True})
 
 
 if __name__ == "__main__":

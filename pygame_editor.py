@@ -833,11 +833,11 @@ class Main():
             # read message queue
             while self.pymoo_message_queue.empty() is False:
                 callback_obj = self.pymoo_message_queue.get()
-                if callback_obj == "finished":
+                if callback_obj["finished"] == True:
                     self.on_optimization_finished()
                 else:
-                    ()
-                   # print(callback_obj)
+                    print(callback_obj["objective_space"])
+                    print(callback_obj["decision_space"])
 
             # handle events
             for event in pygame.event.get():
