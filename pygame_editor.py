@@ -836,6 +836,9 @@ class Main():
                 if callback_obj["finished"] == True:
                     self.on_optimization_finished()
                 else:
+                    # TODO apply one solution from decision space
+                    # -> use ASF selection with weigths
+                    # -> repair solution before application
                     print(callback_obj["objective_space"])
                     print(callback_obj["decision_space"])
 
