@@ -13,8 +13,10 @@ import pygame_gui
 import re
 import os
 import multiprocessing
+import numpy as np
 
-from son_pymoo import AlgorithmEnum, CrossoverEnum, MutationEnum, ObjectiveEnum, SamplingEnum, start_optimization
+from son_pymoo import AlgorithmEnum, CrossoverEnum, MutationEnum, ObjectiveEnum, RunningMode, SamplingEnum, start_optimization
+from pymoo.decomposition.asf import ASF
 
 
 dropdown_menue_options_list = ["macro", "micro", "femto", "pico", "cell", "remove"]
@@ -40,7 +42,7 @@ def get_network_folder_names() -> list[str]:
     # List all files and directories in the current directory
     directory_contents = os.listdir(current_directory)
 
-    # Filter and print only the directory names
+    # Filter and show only the directory names
     folder_names: list[str] = ["from file"]
     for item in directory_contents:
         if os.path.isdir(os.path.join(current_directory, item)):
@@ -51,6 +53,14 @@ def get_network_folder_names() -> list[str]:
 class Main():
     def __init__(self, graph: Son) -> None:
         pygame.init()
+        self.running_mode = RunningMode.STATIC.value
+        self.optimization_running = False
+        self.dt_since_last_activation_profile_fetch = 0
+        self.n_gen_since_last_fetch = 0
+        self.pick_rate_in_s = 5
+        self.pick_rate_in_n_gen = 5
+        self.reset_rate_in_s = 10
+        self.dt_since_last_evo_reset = 0
         self.selected_node_id = None
         self.pymoo_message_queue = multiprocessing.Queue()
         self.editor_message_queue = multiprocessing.Queue()
@@ -61,6 +71,7 @@ class Main():
         self.background.fill(pygame.colordict.THECOLORS["white"])
         self.clock = pygame.time.Clock()
         self.son = graph
+        self.activation = []
         max_x, max_y = self.get_max_x_y(son.graph)
         max_value = max(max_x, max_y)
         self.unit_size_x, self.unit_size_y = (
@@ -203,10 +214,15 @@ class Main():
             (20, 560), (-1, 30)), text='start evo',
             manager=self.manager, container=self.ui_container)
 
+        self.evo_stop_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
+            (20, 590), (-1, 30)), text='stop evo',
+            manager=self.manager, container=self.ui_container)
+        self.evo_stop_button.disable()
+
         self.dropdown_pick_algo_config = pygame_gui.elements.UIDropDownMenu(
             options_list=self.get_configs_for_current_network(),
             starting_option=self.get_configs_for_current_network()[0],
-            relative_rect=pygame.Rect((20, 590), (200, 30)),
+            relative_rect=pygame.Rect((20, 620), (200, 30)),
             manager=self.manager,
             container=self.ui_container,
         )
@@ -215,11 +231,19 @@ class Main():
         self.dropdown_pick_result = pygame_gui.elements.UIDropDownMenu(
             options_list=self.get_results_for_current_config(),
             starting_option=self.get_results_for_current_config()[0],
-            relative_rect=pygame.Rect((20, 620), (200, 30)),
+            relative_rect=pygame.Rect((20, 650), (200, 30)),
             manager=self.manager,
             container=self.ui_container,
         )
         self.dropdown_pick_result.disable()
+
+        self.dropdown_pick_mode = pygame_gui.elements.UIDropDownMenu(
+            options_list=[item.value for item in RunningMode],
+            starting_option=self.running_mode,
+            relative_rect=pygame.Rect((20, 680), (200, 30)),
+            manager=self.manager,
+            container=self.ui_container,
+        )
 
         self.input_network_name = pygame_gui.elements.UITextEntryLine(
             pygame.Rect((-120, -120),
@@ -231,6 +255,12 @@ class Main():
             relative_rect=pygame.Rect((-120, -70), (100, 30)),
             object_id="#save_button", text='save', manager=self.manager, container=self.
             ui_container, anchors={"right": "right", "bottom": "bottom"})
+
+    def disable_ui(self):
+        self.ui_container.disable()
+
+    def enable_ui(self):
+        self.ui_container.enable()
 
     def get_configs_for_current_network(self) -> list[str]:
         result_list = ["from file"]
@@ -322,7 +352,17 @@ class Main():
     def node_drag(self, node_id, target_pos: tuple[int, int]):
         target_x = round(target_pos[0] / self.unit_size_x, 2)
         target_y = round(target_pos[1] / self.unit_size_y, 2)
-        self.son.move_node(node_id, (target_x, target_y), update_network=False)
+        self.son.move_node(
+            node_id, (target_x, target_y),
+            update_network=False)
+
+        if self.running_mode == RunningMode.LIVE.value and self.optimization_running:
+            self.son.apply_edge_activation_encoding_to_graph(
+                self.activation, repair=True, update_network_attributes=True)
+            if self.dt_since_last_evo_reset >= self.reset_rate_in_s:
+                self.dt_since_last_evo_reset = 0
+                self.editor_message_queue.put(
+                    {"terminate": False, "son": self.son, "reset": True, "send_results": False})
 
     def on_left_click(self, target_pos: tuple[int, int]):
         node_id = self.selected_node_id
@@ -469,7 +509,7 @@ class Main():
             self.dropdown_pick_algo_config = pygame_gui.elements.UIDropDownMenu(
                 options_list=self.get_configs_for_current_network(),
                 starting_option=self.get_configs_for_current_network()[0],
-                relative_rect=pygame.Rect((20, 590), (200, 30)),
+                relative_rect=pygame.Rect((20, 620), (200, 30)),
                 manager=self.manager,
                 container=self.ui_container,
             )
@@ -478,7 +518,7 @@ class Main():
             self.dropdown_pick_result = pygame_gui.elements.UIDropDownMenu(
                 options_list=self.get_results_for_current_config(),
                 starting_option=self.get_results_for_current_config()[0],
-                relative_rect=pygame.Rect((20, 620), (200, 30)),
+                relative_rect=pygame.Rect((20, 650), (200, 30)),
                 manager=self.manager,
                 container=self.ui_container,
             )
@@ -522,7 +562,7 @@ class Main():
                 self.dropdown_pick_result = pygame_gui.elements.UIDropDownMenu(
                     options_list=self.get_results_for_current_config(),
                     starting_option=self.get_results_for_current_config()[0],
-                    relative_rect=pygame.Rect((20, 620), (200, 30)),
+                    relative_rect=pygame.Rect((20, 650), (200, 30)),
                     manager=self.manager,
                     container=self.ui_container,
                 )
@@ -534,6 +574,10 @@ class Main():
                 "datastore/" + self.dropdown_menu_pick_network.selected_option + "/" + self.
                 dropdown_pick_algo_config.selected_option + "/" + event.text, True)
         # TODO disable some other elements ?
+
+    def on_dropdown_mode_changed(self, event: pygame.Event):
+
+        self.running_mode = event.text
 
     def create_algo_param_ui_elements(self):
         self.input_pop_size_label = pygame_gui.elements.UILabel(pygame.Rect(
@@ -668,13 +712,21 @@ class Main():
                 str(self.network_params_dic[self.right_mouse_action]["wave_length"]))
 
     def start_bin_packing(self):
-        # TODO uncomment and create new method for this
-        # self.son.find_activation_profile_bin_packing(
-        #     CellOrderTwo.LOWEST_DEGREE_FIRST, bs_order=[BaseStationOrder.MACRO_FIRST],
-        #     bin_packing=BinPackingType.BEST_FIT)
-        self.editor_message_queue.put({"terminate": True, "son": self.son})
+        self.son.find_activation_profile_bin_packing(
+            CellOrderTwo.LOWEST_DEGREE_FIRST, bs_order=[BaseStationOrder.MACRO_FIRST],
+            bin_packing=BinPackingType.BEST_FIT)
+
+    def stop_evo(self):
+        self.editor_message_queue.put(
+            {"terminate": True, "son": self.son, "reset": False, "send_results": False})
+        self.optimization_running = False
+        self.enable_ui()
+        self.evo_stop_button.disable()
 
     def start_evo(self):
+        self.optimization_running = True
+        self.disable_ui()
+        self.evo_stop_button.enable()
 
         if os.path.exists("datastore/" + self.dropdown_menu_pick_network.selected_option):
             result_directory_count = 1
@@ -721,6 +773,7 @@ class Main():
                 "/algorithm_config_" + str(result_directory_count) + "/",
                 self.pymoo_message_queue,
                 self.editor_message_queue,
+                self.running_mode,
                 0.3,
                 0.3
             ))
@@ -765,7 +818,7 @@ class Main():
         self.dropdown_pick_algo_config = pygame_gui.elements.UIDropDownMenu(
             options_list=self.get_configs_for_current_network(),
             starting_option=self.get_configs_for_current_network()[-1],
-            relative_rect=pygame.Rect((20, 590), (200, 30)),
+            relative_rect=pygame.Rect((20, 620), (200, 30)),
             manager=self.manager,
             container=self.ui_container,
         )
@@ -774,10 +827,11 @@ class Main():
         self.dropdown_pick_result = pygame_gui.elements.UIDropDownMenu(
             options_list=self.get_results_for_current_config(),
             starting_option=self.get_results_for_current_config()[0],
-            relative_rect=pygame.Rect((20, 620), (200, 30)),
+            relative_rect=pygame.Rect((20, 650), (200, 30)),
             manager=self.manager,
             container=self.ui_container,
         )
+        self.enable_ui()
 
     def save_current_network(self):
 
@@ -825,22 +879,70 @@ class Main():
             container=self.ui_container
         )
 
+    def select_solution(
+            self, decision_space: np.ndarray, objective_space: np.ndarray, weights: np.ndarray):
+        '''Picks one solution with ASF and given weighting
+
+        Keyword arguments:
+
+        decision_space -- of type numpy array (list[list[int]])
+
+        objective_space -- of type numpy array (list[list[float]])
+
+        weights -- of type numpy array (list[list[float]]), summing up to 1,
+        vector of length equal to len(objective_space)
+        '''
+
+        approx_ideal = objective_space.min(axis=0)
+        approx_nadir = objective_space.max(axis=0)
+
+        # TODO -> handle numpy divide by zero with  np.seterr(divide='ignore', invalid='ignore') maybe
+        nF = (objective_space - approx_ideal) / (approx_nadir - approx_ideal)
+        decomp = ASF()
+        i = decomp.do(nF, 1/weights).argmin()
+        return decision_space[i]
+
     def run(self):
         while True:
             # set time per tick
             dt = self.clock.tick(60)/1000
 
+            if self.running_mode == RunningMode.LIVE.value:
+                self.dt_since_last_activation_profile_fetch += dt
+                self.dt_since_last_evo_reset += dt
+                # if self.dt_since_last_activation_profile_fetch >= self.pick_rate_in_s:
+                #     self.editor_message_queue.put(
+                #         {"terminate": False, "son": self.son, "reset": False, "send_results": True})
+                if self.n_gen_since_last_fetch >= self.pick_rate_in_n_gen:
+                    self.editor_message_queue.put(
+                        {"terminate": False, "son": self.son, "reset": False, "send_results": True})
+
             # read message queue
             while self.pymoo_message_queue.empty() is False:
                 callback_obj = self.pymoo_message_queue.get()
                 if callback_obj["finished"] == True:
+                    # update dropdowns after normal completion and static mode
                     self.on_optimization_finished()
-                else:
-                    # TODO apply one solution from decision space
-                    # -> use ASF selection with weigths
-                    # -> repair solution before application
-                    print(callback_obj["objective_space"])
-                    print(callback_obj["decision_space"])
+
+                if self.running_mode == RunningMode.LIVE.value:
+                    if callback_obj["decision_space"] is not False and callback_obj["objective_space"] is not False:
+                        # -> use ASF selection with weigths to pick one solution
+                        picked_solution = self.select_solution(
+                            decision_space=np.array(callback_obj["decision_space"]),
+                            objective_space=np.array(callback_obj["objective_space"]),
+                            weights=np.array([[0.5, 0.5]]))
+                        self.activation = picked_solution.tolist()
+                        # -> repair solution before application
+                        # TODO repairs although over time there should only be valid solutions ?
+                        self.son.apply_edge_activation_encoding_to_graph(
+                            picked_solution.tolist(),
+                            repair=True, update_network_attributes=True)
+                        # reset counters
+                        self.dt_since_last_activation_profile_fetch = 0
+                        self.n_gen_since_last_fetch = 0
+
+                    if callback_obj["n_gen_since_last_fetch"] is not False:
+                        self.n_gen_since_last_fetch = callback_obj["n_gen_since_last_fetch"]
 
             # handle events
             for event in pygame.event.get():
@@ -878,6 +980,8 @@ class Main():
                         self.show_objectives_info_box()
                     if event.ui_element == self.evo_start_button:
                         self.start_evo()
+                    if event.ui_element == self.evo_stop_button:
+                        self.stop_evo()
                 if event.type == pygame_gui.UI_DROP_DOWN_MENU_CHANGED:
                     if event.ui_element == self.dropdown_menu:
                         self.on_dropdown_changed(event)
@@ -898,6 +1002,8 @@ class Main():
                         self.on_dropdown_pick_algo_config_changed(event)
                     if event.ui_element == self.dropdown_pick_result:
                         self.on_dropdown_pick_result_changed(event)
+                    if event.ui_element == self.dropdown_pick_mode:
+                        self.on_dropdown_mode_changed(event)
                 if event.type == pygame_gui.UI_SELECTION_LIST_NEW_SELECTION or event.type == pygame_gui.UI_SELECTION_LIST_DROPPED_SELECTION:
                     if event.ui_element == self.input_objectives:
                         self.on_selectionlist_input_changed(event)

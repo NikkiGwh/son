@@ -116,9 +116,11 @@ class Son:
 
     def initialize_edges(self):
         edge_list_with_attributes: list[tuple[str, str, dict]] = []
+
         self.graph.clear_edges()
         # only add edges for cell-bs pairs which hav minimum rssi signal strength
-        for _, cell in enumerate(filter(self.filter_user_nodes, self.graph.nodes.data())):
+        for _, cell in enumerate(
+                filter(self.filter_user_nodes, self.graph.nodes.data())):
             for _, bs_node in enumerate(
                     filter(self.filter_bs_nodes, self.graph.nodes.data())):
                 current_rssi = self.get_rssi_cell(cell[0], (cell[0], bs_node[0]))
@@ -129,14 +131,11 @@ class Son:
                     attribute_dic = {}
                     attribute_dic["rssi"] = current_rssi
                     attribute_dic["distance"] = current_distance
+                    attribute_dic["active"] = False
                     edge_list_with_attributes.append(
                         (cell[0], bs_node[0], attribute_dic))
 
         self.graph.add_edges_from(edge_list_with_attributes)
-
-        # set initial active edges attribute
-        for _, edge in enumerate(self.graph.edges.data()):
-            self.graph[edge[0]][edge[1]]["active"] = False
 
     def get_node_style(self):
         node_colors: list[str] = []
@@ -321,7 +320,10 @@ class Son:
         # update all node attributes
         self.update_network_attributes()
 
-    def move_node(self, node_id: str, pos: tuple[float, float], update_network=True):
+    def move_node(
+            self, node_id: str, pos: tuple[float, float],
+            update_network=True):
+
         self.graph.nodes.data()[node_id]["pos_x"] = round(pos[0], 2)
         self.graph.nodes.data()[node_id]["pos_y"] = round(pos[1], 2)
         self.initialize_edges()
@@ -891,12 +893,43 @@ class Son:
             cell_encoding_list.append(cell_encoding_str)
         return cell_encoding_list
 
-    def apply_edge_activation_encoding_to_graph(self, encoding: list[int]):
+    def get_edge_activation_encoding_from_graph_int_list(self):
+        """get the current activation profile of the network edges as list decoding
+
+        Returns:
+            list of int with each int representing activation index of base stations for
+            each cell
+        """
+        cell_encoding_list: list[int] = []
+        for _, cell_node in enumerate(
+                filter(self.filter_user_nodes, self.graph.nodes.data())):
+            for edge_index, edge in enumerate(self.graph[cell_node[0]].items()):
+                if edge[1]["active"]:
+                    cell_encoding_list.append(edge_index)
+                    break
+        return cell_encoding_list
+
+    def apply_edge_activation_encoding_to_graph(
+            self, encoding: list[int],
+            repair=False,
+            update_network_attributes=True):
         """takes activation list encoding and applies it on network accordingly
+        and also repairs encoding if there are any violations against the current topology
+
+        TODO add repair mecanism for changing number of user nodes
 
         Args:
             encoding (list[int]): activation list of cell edges
         """
+        if repair:
+            binary_activation_profile_encoding = self.get_edge_activation_encoding_from_graph()
+            for index, cell_edges_encoded in enumerate(binary_activation_profile_encoding):
+                xu = len(cell_edges_encoded)
+                xl = 1
+                if encoding[index] > xu or encoding[index] < xl:
+                    encoding[index] = np.random.randint(xl, xu+1)
+                    print("repair")
+
         for user_node_index, user_node in enumerate(
                 filter(self.filter_user_nodes, self.graph.nodes.data())):
             for edge_index, edge in enumerate(self.graph[user_node[0]].items()):
@@ -906,7 +939,9 @@ class Son:
                 else:
                     edge[1]["active"] = False
                     # self.set_edge_active(user_node[0], edge[0], False)
-        self.update_network_attributes()
+
+        if update_network_attributes:
+            self.update_network_attributes()
 
     def save_edge_activation_profile_to_file(
             self, encoding: list[int], result_file_name: str,

@@ -1,5 +1,6 @@
 import json
 import multiprocessing
+from pdb import run
 from typing_extensions import runtime
 import numpy as np
 from pandas import MultiIndex
@@ -36,6 +37,11 @@ class ObjectiveEnum(Enum):
     AVG_RSSI = "AVG_RSSI"
     AVG_DL_RATE = "AVG_DL_RATE"
     ENERGY_EFFICIENCY = "ENERGY_EFFICIENCY"
+
+
+class RunningMode(Enum):
+    STATIC = "STATIC"
+    LIVE = "LIVE"
 
 
 class AlgorithmEnum(Enum):
@@ -197,25 +203,49 @@ class SonDublicateElimination(ElementwiseDuplicateElimination):
 class MyCallback(Callback):
 
     def __init__(self, pymoo_message_queue: multiprocessing.Queue,
-                 editor_message_queue: multiprocessing.Queue, son: Son) -> None:
+                 editor_message_queue: multiprocessing.Queue, son: Son, running_mode: str) -> None:
         super().__init__()
+
         self.data["external_termination"] = False
+        self.data["external_reset"] = False
         self.data["son"] = son
         self.pymoo_message_queue = pymoo_message_queue
         self.editor_message_queue = editor_message_queue
+        self.running_mode = running_mode
+        self.n_gen_since_last_fetch = 0
 
     def notify(self, algorithm: GeneticAlgorithm):
-        # read editor message queue
-        while self.editor_message_queue.empty() is False:
-            callback_obj = self.editor_message_queue.get()
-            self.data["son"] = callback_obj["son"]
-            if callback_obj["terminate"] == True:
-                self.data["external_termination"] = True
-                algorithm.termination.terminate()
+        queue_filled = False
+        if self.running_mode == RunningMode.LIVE.value:
+            self.n_gen_since_last_fetch += 1
+            # read editor message queue
+            while self.editor_message_queue.empty() is False:
+                callback_obj = self.editor_message_queue.get()
+                # TODO das setzen des neuen sons muss woanders hin -> in while loop denke ich
+                self.data["son"] = callback_obj["son"]
+                queue_filled = True
 
-        # write to pymoo message queue
+                if callback_obj["terminate"] == True:
+                    algorithm.termination.terminate()
+                    self.data["external_termination"] = True
+                elif callback_obj["reset"] == True:
+                    self.data["external_reset"] = True
+                    algorithm.termination.terminate()
+                elif callback_obj["send_results"] == True:
+                    self.pymoo_message_queue.put(
+                        {"decision_space": algorithm.pop.get("X"),
+                         "objective_space": algorithm.pop.get("F"),
+                         "finished": False,
+                         "n_gen_since_last_fetch": self.n_gen_since_last_fetch})
+                    self.n_gen_since_last_fetch = 0
 
-        # self.pymoo_message_queue.put({"n_gen": algorithm.n_gen})
+            # write to pymoo message queue
+            if queue_filled is False:
+                self.pymoo_message_queue.put(
+                    {"decision_space": False,
+                     "objective_space": False,
+                     "finished": False,
+                     "n_gen_since_last_fetch": self.n_gen_since_last_fetch})
 
 ################################ main ###################
 # TODO add weigthing parameters for objectives with augumented scalarization function
@@ -237,6 +267,7 @@ def start_optimization(
         folder_path: str,
         pymoo_message_queue: multiprocessing.Queue,
         editor_message_queue: multiprocessing.Queue,
+        running_mode: str,
         prob_mutation: float = 0.3,
         prob_crossover: float = 0.9):
 
@@ -244,6 +275,15 @@ def start_optimization(
     samplingConfig = None
     mutationConfig = None
     crossoverConfig = None
+
+    verbose = True
+    history = True
+    if running_mode == RunningMode.LIVE.value:
+        verbose = False
+        history = False
+    else:
+        verbose = True
+        history = True
 
     # sampling
     if (sampling == SamplingEnum.RANDOM_SAMPLING.value):
@@ -303,109 +343,116 @@ def start_optimization(
     # start computatoin with  termination criteria
 
     result = minimize(
-        sonProblem, pymooAlgorithm, termination=termination_obj, seed=1, verbose=True,
-        save_history=True,
+        sonProblem, pymooAlgorithm, termination=termination_obj, seed=1, verbose=verbose,
+        save_history=history,
         callback=MyCallback(
             pymoo_message_queue=pymoo_message_queue, editor_message_queue=editor_message_queue,
-            son=son_obj))
+            son=son_obj, running_mode=running_mode))
 
-    while result.algorithm.callback.data["external_termination"]:
+    if running_mode == RunningMode.LIVE.value:
+        while result.algorithm.callback.data["external_reset"] and result.algorithm.callback.data["external_termination"] == False:
 
-        pymoo_message_queue.put({"decision_space": result.X, "objective_space": result.F, "finished": False})
+            # reinitialize algorithm config
+            sonProblem = SonProblemElementWise(
+                obj_dict=objectives, son=result.algorithm.callback.data["son"])
+            samplingConfig = SeedSampling(seed_pop=result.pop.get("X"))
 
-        # reinitialize algorithm config
-        sonProblem = SonProblemElementWise(
-            obj_dict=objectives, son=result.algorithm.callback.data["son"])
-        samplingConfig = SeedSampling(seed_pop=result.pop.get("X"))
+            if (algorithm == AlgorithmEnum.NSGA3.value):
+                # create the reference directions to be used for the optimization in NSGA3
+                ref_dirs = get_reference_directions("uniform", len(objectives), n_partitions=12)
+                pymooAlgorithm = NSGA3(pop_size=pop_size,
+                                       sampling=samplingConfig,
+                                       crossover=crossoverConfig,
+                                       mutation=mutationConfig,
+                                       n_offsprings=n_offsprings,
+                                       eliminate_duplicates=eliminate_duplicates,
+                                       n_generations=n_generations,
+                                       ref_dirs=ref_dirs)
+            else:
+                pymooAlgorithm = NSGA2(pop_size=pop_size,
+                                       n_offsprings=n_offsprings,
+                                       sampling=samplingConfig,
+                                       crossover=crossoverConfig,
+                                       mutation=mutationConfig,
+                                       eliminate_duplicates=eliminate_duplicates,
+                                       n_generations=n_generations)
+            result = minimize(
+                sonProblem, pymooAlgorithm, termination=termination_obj, seed=1, verbose=verbose,
+                save_history=history,
+                callback=MyCallback(
+                    pymoo_message_queue=pymoo_message_queue,
+                    editor_message_queue=editor_message_queue, son=result.algorithm.callback.data
+                    ["son"], running_mode=running_mode))
 
-        if (algorithm == AlgorithmEnum.NSGA3.value):
-            # create the reference directions to be used for the optimization in NSGA3
-            ref_dirs = get_reference_directions("uniform", len(objectives), n_partitions=12)
-            pymooAlgorithm = NSGA3(pop_size=pop_size,
-                                   sampling=samplingConfig,
-                                   crossover=crossoverConfig,
-                                   mutation=mutationConfig,
-                                   n_offsprings=n_offsprings,
-                                   eliminate_duplicates=eliminate_duplicates,
-                                   n_generations=n_generations,
-                                   ref_dirs=ref_dirs)
-        else:
-            pymooAlgorithm = NSGA2(pop_size=pop_size,
-                                   n_offsprings=n_offsprings,
-                                   sampling=samplingConfig,
-                                   crossover=crossoverConfig,
-                                   mutation=mutationConfig,
-                                   eliminate_duplicates=eliminate_duplicates,
-                                   n_generations=n_generations)
-        result = minimize(
-            sonProblem, pymooAlgorithm, termination=termination_obj, seed=1, verbose=True,
-            save_history=True,
-            callback=MyCallback(
-                pymoo_message_queue=pymoo_message_queue, editor_message_queue=editor_message_queue,
-                son=result.algorithm.callback.data["son"]))
+        pymoo_message_queue.put(
+            {"decision_space": result.X, "objective_space": result.F, "finished": False,
+             "n_gen_since_last_fetch": False})
 
     decisionSpace = result.X
     objectiveSpace = result.F
     exec_time = result.exec_time
     print("------- execution time in ms ------")
     print(exec_time)
-    n_evals_list = []             # corresponding number of function evaluations\
-    hist_F = []              # the objective space values in each generation
-    hist_cv = []             # constraint violation in each generation
-    hist_cv_avg = []         # average constraint violation in the whole population
 
-    for algo in result.history:
-        # store the number of function evaluations
-        n_evals_list.append(algo.evaluator.n_eval)
+    if running_mode == RunningMode.STATIC.value:
+        n_evals_list = []        # corresponding number of function evaluations\
+        hist_F = []              # the objective space values in each generation
+        hist_cv = []             # constraint violation in each generation
+        hist_cv_avg = []         # average constraint violation in the whole population
 
-        # retrieve the optimum from the algorithm
-        opt = algo.opt
+        for algo in result.history:
+            # store the number of function evaluations
+            n_evals_list.append(algo.evaluator.n_eval)
 
-        # store the least contraint violation and the average in each population
-        hist_cv.append(opt.get("CV").min())
-        hist_cv_avg.append(algo.pop.get("CV").mean())
+            # retrieve the optimum from the algorithm
+            opt = algo.opt
 
-        # filter out only the feasible and append and objective space values
-        feas = np.where(opt.get("feasible"))[0]
-        hist_F.append(opt.get("F")[feas].tolist())
+            # store the least contraint violation and the average in each population
+            hist_cv.append(opt.get("CV").min())
+            hist_cv_avg.append(algo.pop.get("CV").mean())
 
-    # save all result individuums as json and create objective result dict
-    objective_result_dic = {
-        "optimization_objectives": objectives,
-        "results": [],
-        "decisionSpace": decisionSpace.tolist(),
-        "objectiveSpace": objectiveSpace.tolist(),
-        "history": {
-            "n_evals": n_evals_list,
-            "objective_space_opt": hist_F,
-            "hist_cv": hist_cv,
-            "hist_cv_avg": hist_cv_avg
-        }}
+            # filter out only the feasible and append and objective space values
+            feas = np.where(opt.get("feasible"))[0]
+            hist_F.append(opt.get("F")[feas].tolist())
 
-    for i, individuum in enumerate(decisionSpace):
-        sonProblem.son_original.apply_edge_activation_encoding_to_graph(individuum)
-        objective_result_dic["results"].append(
-            ("ind_result_" +
-             str(i + 1),
-             {ObjectiveEnum.AVG_SINR.name: sonProblem.son_original.get_average_sinr(),
-              ObjectiveEnum.AVG_RSSI.name: sonProblem.son_original.get_average_rssi(),
-              ObjectiveEnum.AVG_LOAD.name: sonProblem.son_original.get_average_network_load(),
-              ObjectiveEnum.POWER_CONSUMPTION.name: sonProblem.son_original.get_total_energy_consumption(),
-              ObjectiveEnum.ENERGY_EFFICIENCY.name: sonProblem.son_original.get_energy_efficiency(),
-              ObjectiveEnum.AVG_DL_RATE.name: sonProblem.son_original.get_average_dl_datarate()}))
-        sonProblem.son_original.save_json_adjacency_graph_to_file(
-            filename=folder_path + "ind_result_" + str(i + 1) + ".json")
+        # save all result individuums as json and create objective result dict
+        objective_result_dic = {
+            "optimization_objectives": objectives,
+            "results": [],
+            "decisionSpace": decisionSpace.tolist(),
+            "objectiveSpace": objectiveSpace.tolist(),
+            "history": {
+                "n_evals": n_evals_list,
+                "objective_space_opt": hist_F,
+                "hist_cv": hist_cv,
+                "hist_cv_avg": hist_cv_avg
+            }}
 
-    # save objecitve results to overview file
-    # Convert the list to JSON
-    json_data = json.dumps(objective_result_dic)
+        for i, individuum in enumerate(decisionSpace):
+            sonProblem.son_original.apply_edge_activation_encoding_to_graph(individuum)
+            objective_result_dic["results"].append(
+                ("ind_result_" +
+                 str(i + 1),
+                 {ObjectiveEnum.AVG_SINR.name: sonProblem.son_original.get_average_sinr(),
+                  ObjectiveEnum.AVG_RSSI.name: sonProblem.son_original.get_average_rssi(),
+                  ObjectiveEnum.AVG_LOAD.name: sonProblem.son_original.get_average_network_load(),
+                  ObjectiveEnum.POWER_CONSUMPTION.name: sonProblem.son_original.get_total_energy_consumption(),
+                  ObjectiveEnum.ENERGY_EFFICIENCY.name: sonProblem.son_original.get_energy_efficiency(),
+                  ObjectiveEnum.AVG_DL_RATE.name: sonProblem.son_original.get_average_dl_datarate()}))
+            sonProblem.son_original.save_json_adjacency_graph_to_file(
+                filename=folder_path + "ind_result_" + str(i + 1) + ".json")
 
-    # Save JSON data to a file
-    file_path = folder_path + "objectives_result.json"
-    with open(file_path, 'w', encoding="utf-8") as file:
-        file.write(json_data)
+        # save objecitve results to overview file
+        # Convert the list to JSON
+        json_data = json.dumps(objective_result_dic)
 
-    pymoo_message_queue.put({"finished": True})
+        # Save JSON data to a file
+        file_path = folder_path + "objectives_result.json"
+        with open(file_path, 'w', encoding="utf-8") as file:
+            file.write(json_data)
+
+    pymoo_message_queue.put({"decision_space": False, "objective_space": False,
+                            "finished": True, "n_gen_since_last_fetch": False})
 
 
 if __name__ == "__main__":
