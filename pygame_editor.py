@@ -66,6 +66,7 @@ class Main():
         self.dt_since_last_evo_reset = 0
         self.ngen_since_last_evo_reset = 0
         self.selected_node_id = None
+        self.moving_users = []
         self.pymoo_message_queue = multiprocessing.Queue()
         self.editor_message_queue = multiprocessing.Queue()
         self.right_mouse_action = dropdown_menue_options_list[0]
@@ -359,13 +360,46 @@ class Main():
         self.son.move_node(
             node_id, (target_x, target_y),
             update_network=False)
-        print("drag")
         self.topology_changed = True
 
         if self.running_mode == RunningMode.LIVE.value and self.optimization_running:
-            # apply the currently stored activation profile of the editor
+            # apply the currently stored activation profile of the editor with repair
             self.son.apply_edge_activation_encoding_to_graph(
                 self.activation, repair=True, update_network_attributes=True)
+
+    def initialize_moving_users(self):
+        user_nodes = [x[0]
+                      for x in list(
+                          filter(self.son.filter_user_nodes, self.son.graph.nodes.data()))]
+
+        # randomly select x % of the useres for movement and create list with ids
+        selection_list = np.random.choice([1, 0], size=len(user_nodes), p=[0.3, 0.7])
+        self.moving_users = [x for index, x in enumerate(user_nodes) if selection_list[index] == 1]
+
+    def move_some_users(self):
+
+        for _, user_node_id in enumerate(self.moving_users):
+            self.move_one_user(user_node_id)
+
+        self.son.initialize_edges()
+
+        # apply the currently stored activation profile of the editor with repair after movement finished
+        if self.topology_changed and len(self.activation) > 0:
+            self.son.apply_edge_activation_encoding_to_graph(
+                self.activation, repair=True, update_network_attributes=True)
+
+    def move_one_user(self, user_node_id: str):
+
+        # TODO define moving profile and ensure 100% connections
+        # TODO make it performant
+
+        target_x = self.son.graph.nodes[user_node_id]["pos_x"] + 0.01  # * self.unit_size_x
+        target_y = self.son.graph.nodes[user_node_id]["pos_y"] + 0.01  # * self.unit_size_y
+        self.son.move_node(
+            user_node_id, (target_x, target_y),
+            update_network=False, initialize_edges=False)
+
+        self.topology_changed = True
 
     def trigger_evo_reset_invalid_activation_profile(self):
         # invoke evo_reset if threshhold is met
@@ -375,9 +409,9 @@ class Main():
             if (len(
                     self.activation) > 0 and not self.son.valid_edge_activation_profile_encoding(
                     self.activation)) or self.topology_changed:
+
                 self.dt_since_last_evo_reset = 0
                 self.ngen_since_last_evo_reset = 0
-                print(self.topology_changed)
                 self.topology_changed = False
                 self.editor_message_queue.put(
                     {"terminate": False, "son": self.son, "reset": True, "send_results": False})
@@ -737,14 +771,8 @@ class Main():
     def stop_evo(self):
         self.editor_message_queue.put(
             {"terminate": True, "son": self.son, "reset": False, "send_results": False})
-        self.optimization_running = False
-        self.enable_ui()
-        self.evo_stop_button.disable()
 
     def start_evo(self):
-        self.optimization_running = True
-        self.disable_ui()
-        self.evo_stop_button.enable()
 
         if os.path.exists("datastore/" + self.dropdown_menu_pick_network.selected_option):
             result_directory_count = 1
@@ -797,6 +825,12 @@ class Main():
             ))
             optimization_process.start()
 
+            self.optimization_running = True
+            self.disable_ui()
+            self.evo_stop_button.enable()
+
+            self.initialize_moving_users()
+
             # TODO uncomment if returning to sequential processing
 
             # # update algo param config dropdown
@@ -832,6 +866,8 @@ class Main():
 
     def on_optimization_finished(self):
         # update algo param config dropdown
+        self.optimization_running = False
+        self.evo_stop_button.disable()
         self.dropdown_pick_algo_config.kill()
         self.dropdown_pick_algo_config = pygame_gui.elements.UIDropDownMenu(
             options_list=self.get_configs_for_current_network(),
@@ -925,9 +961,12 @@ class Main():
             # set time per tick
             dt = self.clock.tick(60)/1000
 
-            if self.running_mode == RunningMode.LIVE.value:
+            if self.running_mode == RunningMode.LIVE.value and self.optimization_running:
                 self.dt_since_last_activation_profile_fetch += dt
                 self.dt_since_last_evo_reset += dt
+
+                # move users
+                self.move_some_users()
 
                 # send fetch data fetch request to process queue
                 if self.n_gen_since_last_fetch >= self.pick_rate_in_n_gen or self.dt_since_last_activation_profile_fetch >= self.pick_rate_in_s:

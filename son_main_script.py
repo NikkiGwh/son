@@ -321,12 +321,14 @@ class Son:
         self.update_network_attributes()
 
     def move_node(
-            self, node_id: str, pos: tuple[float, float],
+            self, node_id: str, pos: tuple[float, float], initialize_edges=True,
             update_network=True):
 
-        self.graph.nodes.data()[node_id]["pos_x"] = round(pos[0], 2)
-        self.graph.nodes.data()[node_id]["pos_y"] = round(pos[1], 2)
-        self.initialize_edges()
+        self.graph.nodes.data()[node_id]["pos_x"] = round(pos[0], 8)
+        self.graph.nodes.data()[node_id]["pos_y"] = round(pos[1], 8)
+
+        if initialize_edges:
+            self.initialize_edges()
 
         if update_network:
             self.update_network_attributes()

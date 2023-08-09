@@ -297,7 +297,7 @@ def start_optimization(
     verbose = True
     history = True
     if running_mode == RunningMode.LIVE.value:
-        verbose = True
+        verbose = False
         history = False
     else:
         verbose = True
