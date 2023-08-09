@@ -226,17 +226,33 @@ class MyCallback(Callback):
                 queue_filled = True
 
                 if callback_obj["terminate"] == True:
-                    algorithm.termination.terminate()
                     self.data["external_termination"] = True
+                    self.pymoo_message_queue.put(
+                        {"decision_space": algorithm.pop.get("X"),
+                         "objective_space": algorithm.pop.get("F"),
+                         "finished": False,
+                         "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
+                         "n_gen": 0
+                         })
+                    algorithm.termination.terminate()
                 elif callback_obj["reset"] == True:
                     self.data["external_reset"] = True
+                    self.pymoo_message_queue.put(
+                        {"decision_space": algorithm.pop.get("X"),
+                         "objective_space": algorithm.pop.get("F"),
+                         "finished": False,
+                         "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
+                         "n_gen": 0
+                         })
                     algorithm.termination.terminate()
                 elif callback_obj["send_results"] == True:
                     self.pymoo_message_queue.put(
                         {"decision_space": algorithm.pop.get("X"),
                          "objective_space": algorithm.pop.get("F"),
                          "finished": False,
-                         "n_gen_since_last_fetch": self.n_gen_since_last_fetch})
+                         "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
+                         "n_gen": algorithm.n_gen
+                         })
                     self.n_gen_since_last_fetch = 0
 
             # write to pymoo message queue
@@ -245,7 +261,9 @@ class MyCallback(Callback):
                     {"decision_space": False,
                      "objective_space": False,
                      "finished": False,
-                     "n_gen_since_last_fetch": self.n_gen_since_last_fetch})
+                     "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
+                     "n_gen": algorithm.n_gen
+                     })
 
 ################################ main ###################
 # TODO add weigthing parameters for objectives with augumented scalarization function
@@ -279,7 +297,7 @@ def start_optimization(
     verbose = True
     history = True
     if running_mode == RunningMode.LIVE.value:
-        verbose = False
+        verbose = True
         history = False
     else:
         verbose = True
@@ -385,8 +403,12 @@ def start_optimization(
                     ["son"], running_mode=running_mode))
 
         pymoo_message_queue.put(
-            {"decision_space": result.X, "objective_space": result.F, "finished": False,
-             "n_gen_since_last_fetch": False})
+            {"decision_space": result.X,
+             "objective_space": result.F,
+             "finished": False,
+             "n_gen_since_last_fetch": False,
+             "n_gen": False
+             })
 
     decisionSpace = result.X
     objectiveSpace = result.F
@@ -451,8 +473,12 @@ def start_optimization(
         with open(file_path, 'w', encoding="utf-8") as file:
             file.write(json_data)
 
-    pymoo_message_queue.put({"decision_space": False, "objective_space": False,
-                            "finished": True, "n_gen_since_last_fetch": False})
+    pymoo_message_queue.put({"decision_space": False,
+                             "objective_space": False,
+                            "finished": True,
+                             "n_gen_since_last_fetch": False,
+                             "n_gen": False
+                             })
 
 
 if __name__ == "__main__":

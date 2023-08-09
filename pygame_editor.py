@@ -53,14 +53,18 @@ def get_network_folder_names() -> list[str]:
 class Main():
     def __init__(self, graph: Son) -> None:
         pygame.init()
-        self.running_mode = RunningMode.STATIC.value
+        self.running_mode = RunningMode.LIVE.value
+        self.topology_changed = False
         self.optimization_running = False
         self.dt_since_last_activation_profile_fetch = 0
         self.n_gen_since_last_fetch = 0
-        self.pick_rate_in_s = 5
+        self.pick_rate_in_s = 20
         self.pick_rate_in_n_gen = 5
-        self.reset_rate_in_s = 10
+        self.reset_rate_in_s = 20
+        self.reset_delay_in_s = 10
+        self.reset_rate_in_ngen = 5
         self.dt_since_last_evo_reset = 0
+        self.ngen_since_last_evo_reset = 0
         self.selected_node_id = None
         self.pymoo_message_queue = multiprocessing.Queue()
         self.editor_message_queue = multiprocessing.Queue()
@@ -355,12 +359,26 @@ class Main():
         self.son.move_node(
             node_id, (target_x, target_y),
             update_network=False)
+        print("drag")
+        self.topology_changed = True
 
         if self.running_mode == RunningMode.LIVE.value and self.optimization_running:
+            # apply the currently stored activation profile of the editor
             self.son.apply_edge_activation_encoding_to_graph(
                 self.activation, repair=True, update_network_attributes=True)
-            if self.dt_since_last_evo_reset >= self.reset_rate_in_s:
+
+    def trigger_evo_reset_invalid_activation_profile(self):
+        # invoke evo_reset if threshhold is met
+        if self.dt_since_last_evo_reset >= self.reset_rate_in_s or self.ngen_since_last_evo_reset >= self.reset_rate_in_ngen and self.dt_since_last_evo_reset >= self.reset_delay_in_s:
+            # check if current activation profile is valid
+            # or someone has moved since last call
+            if (len(
+                    self.activation) > 0 and not self.son.valid_edge_activation_profile_encoding(
+                    self.activation)) or self.topology_changed:
                 self.dt_since_last_evo_reset = 0
+                self.ngen_since_last_evo_reset = 0
+                print(self.topology_changed)
+                self.topology_changed = False
                 self.editor_message_queue.put(
                     {"terminate": False, "son": self.son, "reset": True, "send_results": False})
 
@@ -910,12 +928,14 @@ class Main():
             if self.running_mode == RunningMode.LIVE.value:
                 self.dt_since_last_activation_profile_fetch += dt
                 self.dt_since_last_evo_reset += dt
-                # if self.dt_since_last_activation_profile_fetch >= self.pick_rate_in_s:
-                #     self.editor_message_queue.put(
-                #         {"terminate": False, "son": self.son, "reset": False, "send_results": True})
-                if self.n_gen_since_last_fetch >= self.pick_rate_in_n_gen:
+
+                # send fetch data fetch request to process queue
+                if self.n_gen_since_last_fetch >= self.pick_rate_in_n_gen or self.dt_since_last_activation_profile_fetch >= self.pick_rate_in_s:
                     self.editor_message_queue.put(
                         {"terminate": False, "son": self.son, "reset": False, "send_results": True})
+
+                # trigger evo_reset if current activation profile violates son topology
+                self.trigger_evo_reset_invalid_activation_profile()
 
             # read message queue
             while self.pymoo_message_queue.empty() is False:
@@ -932,17 +952,19 @@ class Main():
                             objective_space=np.array(callback_obj["objective_space"]),
                             weights=np.array([[0.5, 0.5]]))
                         self.activation = picked_solution.tolist()
-                        # -> repair solution before application
-                        # TODO repairs although over time there should only be valid solutions ?
+                        # -> repair solution and apply new activation profile
                         self.son.apply_edge_activation_encoding_to_graph(
                             picked_solution.tolist(),
                             repair=True, update_network_attributes=True)
                         # reset counters
                         self.dt_since_last_activation_profile_fetch = 0
-                        self.n_gen_since_last_fetch = 0
+                        # self.n_gen_since_last_fetch = 0
 
                     if callback_obj["n_gen_since_last_fetch"] is not False:
                         self.n_gen_since_last_fetch = callback_obj["n_gen_since_last_fetch"]
+
+                    if callback_obj["n_gen"] is not False:
+                        self.ngen_since_last_evo_reset = callback_obj["n_gen"]
 
             # handle events
             for event in pygame.event.get():

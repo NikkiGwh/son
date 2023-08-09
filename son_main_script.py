@@ -928,7 +928,6 @@ class Son:
                 xl = 1
                 if encoding[index] > xu or encoding[index] < xl:
                     encoding[index] = np.random.randint(xl, xu+1)
-                    print("repair")
 
         for user_node_index, user_node in enumerate(
                 filter(self.filter_user_nodes, self.graph.nodes.data())):
@@ -942,6 +941,25 @@ class Son:
 
         if update_network_attributes:
             self.update_network_attributes()
+
+    def valid_edge_activation_profile_encoding(
+            self, encoding: list[int]):
+        """takes activation list encoding and checks if it violates the current topology
+
+        Args:
+            encoding (list[int]): activation list of cell edges
+
+        returns:
+            boolean (True) if there is no violation
+        """
+
+        binary_activation_profile_encoding = self.get_edge_activation_encoding_from_graph()
+        for index, cell_edges_encoded in enumerate(binary_activation_profile_encoding):
+            xu = len(cell_edges_encoded)
+            xl = 1
+            if encoding[index] > xu or encoding[index] < xl:
+                return (False)
+        return True
 
     def save_edge_activation_profile_to_file(
             self, encoding: list[int], result_file_name: str,
