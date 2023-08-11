@@ -14,7 +14,7 @@ import re
 import os
 import multiprocessing
 import numpy as np
-
+from math import cos, sin
 from son_pymoo import AlgorithmEnum, CrossoverEnum, MutationEnum, ObjectiveEnum, RunningMode, SamplingEnum, start_optimization
 from pymoo.decomposition.asf import ASF
 
@@ -55,18 +55,23 @@ class Main():
         pygame.init()
         self.running_mode = RunningMode.LIVE.value
         self.topology_changed = False
+        self.dt_since_last_history_update = 0
+        self.dt_runtime = 0
         self.optimization_running = False
         self.dt_since_last_activation_profile_fetch = 0
         self.n_gen_since_last_fetch = 0
+        self.moving_speed = 0.1
         self.pick_rate_in_s = 20
         self.pick_rate_in_n_gen = 5
         self.reset_rate_in_s = 20
         self.reset_delay_in_s = 10
         self.reset_rate_in_ngen = 5
         self.dt_since_last_evo_reset = 0
+        self.objective_history = []
         self.ngen_since_last_evo_reset = 0
         self.selected_node_id = None
-        self.moving_users = []
+        self.moving_users = {}
+        self.current_save_result_directory = ""
         self.pymoo_message_queue = multiprocessing.Queue()
         self.editor_message_queue = multiprocessing.Queue()
         self.right_mouse_action = dropdown_menue_options_list[0]
@@ -372,14 +377,32 @@ class Main():
                       for x in list(
                           filter(self.son.filter_user_nodes, self.son.graph.nodes.data()))]
 
-        # randomly select x % of the useres for movement and create list with ids
+        # randomly select x % of the useres for movement and dict with ids and moving vector
         selection_list = np.random.choice([1, 0], size=len(user_nodes), p=[0.3, 0.7])
-        self.moving_users = [x for index, x in enumerate(user_nodes) if selection_list[index] == 1]
+        selection_id_list = [x for index, x in enumerate(user_nodes) if selection_list[index] == 1]
+
+        # initialize moving directions randomly
+        deg = np.random.randint(0, 360, size=len(selection_id_list))
+        for index, deg_value in enumerate(deg):
+            v = self.rotate_vector_by_deg(np.array([1, 0]), deg_value)
+            self.moving_users[selection_id_list[index]] = (v[0], v[1])
+
+    def rotate_vector_by_deg(self, vec: np.ndarray, deg: int) -> np.ndarray:
+        # rotate vector
+
+        theta = np.deg2rad(deg)
+        rot = np.array([[cos(theta), -sin(theta)], [sin(theta), cos(theta)]])
+        v2 = np.dot(rot, vec)
+
+        # normalize vector
+        vector_norm = v2 / np.linalg.norm(v2)
+
+        return vector_norm
 
     def move_some_users(self):
+        for _, user_id in enumerate(self.moving_users):
 
-        for _, user_node_id in enumerate(self.moving_users):
-            self.move_one_user(user_node_id)
+            self.move_one_user(user_id)
 
         self.son.initialize_edges()
 
@@ -390,16 +413,43 @@ class Main():
 
     def move_one_user(self, user_node_id: str):
 
-        # TODO define moving profile and ensure 100% connections
         # TODO make it performant
+        self.update_direction_for_user(user_node_id)
 
-        target_x = self.son.graph.nodes[user_node_id]["pos_x"] + 0.01  # * self.unit_size_x
-        target_y = self.son.graph.nodes[user_node_id]["pos_y"] + 0.01  # * self.unit_size_y
-        self.son.move_node(
-            user_node_id, (target_x, target_y),
-            update_network=False, initialize_edges=False)
+        current_x_pos = self.son.graph.nodes[user_node_id]["pos_x"]
+        current_y_pos = self.son.graph.nodes[user_node_id]["pos_y"]
+        self.son.move_node(user_node_id,
+                           (self.moving_users[user_node_id][0] * self.moving_speed + current_x_pos,
+                            self.moving_users[user_node_id][1] * self.moving_speed + current_y_pos),
+                           update_network=False, initialize_edges=False)
 
         self.topology_changed = True
+
+    def update_direction_for_user(self, user_node_id: str):
+        while (self.check_direction_valid(user_node_id) is False):
+            new_direction_numpy = self.rotate_vector_by_deg(
+                np.array(self.moving_users[user_node_id]), 30)
+
+            self.moving_users[user_node_id] = (new_direction_numpy[0], new_direction_numpy[1])
+
+    def check_direction_valid(self, user_node_id: str):
+
+        for _, edge in enumerate(self.son.graph[user_node_id].items()):
+
+            next_rssi = self.son.get_rssi_cell(user_node_id, (user_node_id, edge[0]), moving_vector=(
+                self.moving_users[user_node_id][0] * self.moving_speed, self.moving_users[user_node_id][1] * self.moving_speed))
+
+            if next_rssi > self.son.min_rssi:
+                return True
+
+        return False
+
+    def update_objective_history(self):
+        current_energy_efficiency = self.son.get_energy_efficiency()
+        current_avg_dl_datarate = self.son.get_average_dl_datarate()
+        self.objective_history.append(
+            (round(self.dt_runtime, 2), current_energy_efficiency, current_avg_dl_datarate))
+        self.dt_since_last_history_update = 0
 
     def trigger_evo_reset_invalid_activation_profile(self):
         # invoke evo_reset if threshhold is met
@@ -782,10 +832,11 @@ class Main():
                 if "algorithm_config" in item:
                     result_directory_count += 1
             os.mkdir("datastore/" + self.dropdown_menu_pick_network.selected_option +
-                     "/algorithm_config_" + str(result_directory_count))
+                     "/algorithm_config_" + str(result_directory_count) + self.running_mode)
+            self.current_save_result_directory = "datastore/" + self.dropdown_menu_pick_network.selected_option + \
+                "/algorithm_config_" + str(result_directory_count) + self.running_mode
             # save current algorithm config
-            with open("datastore/" + self.dropdown_menu_pick_network.selected_option + "/algorithm_config_" +
-                      str(result_directory_count) + "/algorithm_config_" + str(result_directory_count) + ".json", "w+", encoding="utf-8") as outfile:
+            with open(self.current_save_result_directory + "/algorithm_config_" + str(result_directory_count) + self.running_mode + ".json", "w+", encoding="utf-8") as outfile:
                 json.dump(self.algorithm_param_dic, outfile)
             # TODO uncomment if returning to sequential execution
             # start_optimization(
@@ -867,6 +918,19 @@ class Main():
     def on_optimization_finished(self):
         # update algo param config dropdown
         self.optimization_running = False
+
+        if self.running_mode == RunningMode.LIVE.value:
+            self.dt_runtime = 0
+            self.dt_since_last_history_update = 0
+
+            json_data = json.dumps(self.objective_history)
+            # Save JSON data to a file
+            file_path = self.current_save_result_directory + "/objectives_result.json"
+            with open(file_path, 'w', encoding="utf-8") as file:
+                file.write(json_data)
+
+            self.objective_history = []
+
         self.evo_stop_button.disable()
         self.dropdown_pick_algo_config.kill()
         self.dropdown_pick_algo_config = pygame_gui.elements.UIDropDownMenu(
@@ -959,11 +1023,16 @@ class Main():
     def run(self):
         while True:
             # set time per tick
-            dt = self.clock.tick(60)/1000
-
+            dt = self.clock.tick(30)/1000
             if self.running_mode == RunningMode.LIVE.value and self.optimization_running:
-                self.dt_since_last_activation_profile_fetch += dt
+                self.dt_runtime += dt
+                self.dt_since_last_history_update += dt
+
+                if self.dt_since_last_history_update >= 1:
+                    self.update_objective_history()
+
                 self.dt_since_last_evo_reset += dt
+                self.dt_since_last_activation_profile_fetch += dt
 
                 # move users
                 self.move_some_users()
@@ -978,6 +1047,7 @@ class Main():
 
             # read message queue
             while self.pymoo_message_queue.empty() is False:
+                # TODO dont invoke method calls in here but set boolean flags and call them only onece after
                 callback_obj = self.pymoo_message_queue.get()
                 if callback_obj["finished"] == True:
                     # update dropdowns after normal completion and static mode

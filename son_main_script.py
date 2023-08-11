@@ -461,7 +461,7 @@ class Son:
         received_signal_power = self.get_rssi_cell(cell_id, (cell_id, connected_bs_id))
         return round(received_signal_power / (interference_signal + received_signal_power), 4)
 
-    def get_rssi_cell(self, user_id: str, beam: tuple[str, str]):
+    def get_rssi_cell(self, user_id: str, beam: tuple[str, str], moving_vector: tuple[float, float]=(0.0, 0.0)):
         """ returns received signal power for cell with given beam (edge)
 
         Args:
@@ -479,8 +479,8 @@ class Son:
         wave_length = self.network_node_params[bs_type]["wave_length"]
         transmission_power = self.network_node_params[bs_type]["tx_power"]
         distance = self.get_euclidean_distance(
-            (self.graph.nodes.data()[user_id]["pos_x"],
-             self.graph.nodes.data()[user_id]["pos_y"]),
+            (self.graph.nodes.data()[user_id]["pos_x"] + moving_vector[0],
+             self.graph.nodes.data()[user_id]["pos_y"] + moving_vector[1]),
             (self.graph.nodes.data()[beam[1]]["pos_x"],
              self.graph.nodes.data()[beam[1]]["pos_y"]))
 
