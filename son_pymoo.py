@@ -82,10 +82,10 @@ class SonProblemElementWise(ElementwiseProblem):
             list(filter(self.son_original.filter_user_nodes, self.son_original.graph.nodes.data())))
 
         # prepare problem parameter
-        binary_activation_profile_encoding = self.son_original.get_edge_activation_encoding_from_graph()
+        max_activation_values = self.son_original.get_edge_activation_encoding_from_graph()
         xu = np.array([])
-        for _, cell_edges_encoded in enumerate(binary_activation_profile_encoding):
-            xu = np.append(xu, len(cell_edges_encoded))
+        for _, max_value in enumerate(max_activation_values):
+            xu = np.append(xu, max_value)
 
         # call super class constructor
         super().__init__(n_var=n_var, n_obj=len(obj_dict), xl=np.full_like(xu, 1), xu=xu)
@@ -134,6 +134,11 @@ class SeedSampling(Sampling):
 
             for j in range(problem.n_var):
                 if self.seed_pop[i][j] > problem.xu[j] or self.seed_pop[i][j] < problem.xl[j]:
+                    if problem.xl[j] >= problem.xu[j]+1:
+                        print("-----pymoo-------")
+                        print(problem.xl)
+                        print(problem.xu)
+                        print("----------")
                     X[i][j] = np.random.randint(problem.xl[j], problem.xu[j]+1)
                 else:
                     X[i][j] = self.seed_pop[i][j]
@@ -222,10 +227,9 @@ class MyCallback(Callback):
             while self.editor_message_queue.empty() is False:
                 callback_obj = self.editor_message_queue.get()
                 # TODO das setzen des neuen sons muss woanders hin -> in while loop denke ich
-                self.data["son"] = callback_obj["son"]
-                queue_filled = True
 
                 if callback_obj["terminate"] == True:
+                    queue_filled = True
                     self.data["external_termination"] = True
                     self.pymoo_message_queue.put(
                         {"decision_space": algorithm.pop.get("X"),
@@ -235,8 +239,10 @@ class MyCallback(Callback):
                          "n_gen": 0
                          })
                     algorithm.termination.terminate()
-                elif callback_obj["reset"] == True:
+                elif callback_obj["reset"] == True and callback_obj["son"] is not False:
+                    queue_filled = True
                     self.data["external_reset"] = True
+                    self.data["son"] = callback_obj["son"]
                     self.pymoo_message_queue.put(
                         {"decision_space": algorithm.pop.get("X"),
                          "objective_space": algorithm.pop.get("F"),
@@ -246,6 +252,7 @@ class MyCallback(Callback):
                          })
                     algorithm.termination.terminate()
                 elif callback_obj["send_results"] == True:
+                    queue_filled = True
                     self.pymoo_message_queue.put(
                         {"decision_space": algorithm.pop.get("X"),
                          "objective_space": algorithm.pop.get("F"),

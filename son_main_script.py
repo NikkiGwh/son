@@ -121,6 +121,7 @@ class Son:
         # only add edges for cell-bs pairs which hav minimum rssi signal strength
         for _, cell in enumerate(
                 filter(self.filter_user_nodes, self.graph.nodes.data())):
+            count = 0
             for _, bs_node in enumerate(
                     filter(self.filter_bs_nodes, self.graph.nodes.data())):
                 current_rssi = self.get_rssi_cell(cell[0], (cell[0], bs_node[0]))
@@ -128,12 +129,15 @@ class Son:
                     (cell[1]["pos_x"], cell[1]["pos_y"]), (bs_node[1]["pos_x"], bs_node[1]["pos_y"]))
 
                 if current_rssi >= self.min_rssi:
+                    count += 1
                     attribute_dic = {}
                     attribute_dic["rssi"] = current_rssi
                     attribute_dic["distance"] = current_distance
                     attribute_dic["active"] = False
                     edge_list_with_attributes.append(
                         (cell[0], bs_node[0], attribute_dic))
+            if (count == 0):
+                print("WARNING ----- user ohne connections !!!!!!")
 
         self.graph.add_edges_from(edge_list_with_attributes)
 
@@ -320,12 +324,27 @@ class Son:
         # update all node attributes
         self.update_network_attributes()
 
-    def move_node(
+    def move_node_by_pos(
             self, node_id: str, pos: tuple[float, float], initialize_edges=True,
             update_network=True):
 
         self.graph.nodes.data()[node_id]["pos_x"] = round(pos[0], 8)
         self.graph.nodes.data()[node_id]["pos_y"] = round(pos[1], 8)
+
+        if initialize_edges:
+            self.initialize_edges()
+
+        if update_network:
+            self.update_network_attributes()
+
+    def move_node_by_vec(
+            self, node_id: str, vec: tuple[float, float], initialize_edges=True,
+            update_network=True):
+
+        self.graph.nodes.data()[node_id]["pos_x"] = self.graph.nodes.data()[
+            node_id]["pos_x"] + vec[0]
+        self.graph.nodes.data()[node_id]["pos_y"] = self.graph.nodes.data()[
+            node_id]["pos_y"] + vec[1]
 
         if initialize_edges:
             self.initialize_edges()
@@ -461,7 +480,9 @@ class Son:
         received_signal_power = self.get_rssi_cell(cell_id, (cell_id, connected_bs_id))
         return round(received_signal_power / (interference_signal + received_signal_power), 4)
 
-    def get_rssi_cell(self, user_id: str, beam: tuple[str, str], moving_vector: tuple[float, float]=(0.0, 0.0)):
+    def get_rssi_cell(
+            self, user_id: str, beam: tuple[str, str],
+            moving_vector: tuple[float, float] = (0.0, 0.0)):
         """ returns received signal power for cell with given beam (edge)
 
         Args:
@@ -883,16 +904,15 @@ class Son:
             list of binary str with each str representing activation profile of base stations for
             each cell
         """
-        cell_encoding_list: list[str] = []
+        cell_encoding_list: list[int] = []
         for _, cell_node in enumerate(
                 filter(self.filter_user_nodes, self.graph.nodes.data())):
-            cell_encoding_str = ""
+            cell_encoding_count = 0
             for _, edge in enumerate(self.graph[cell_node[0]].items()):
-                if edge[1]["active"]:
-                    cell_encoding_str += "1"
-                else:
-                    cell_encoding_str += "0"
-            cell_encoding_list.append(cell_encoding_str)
+                cell_encoding_count += 1
+            if (cell_encoding_count == 0):
+                print("keine edge!!!!!!!!!!!!!!!!!!!!")
+            cell_encoding_list.append(cell_encoding_count)
         return cell_encoding_list
 
     def get_edge_activation_encoding_from_graph_int_list(self):
@@ -924,10 +944,11 @@ class Son:
             encoding (list[int]): activation list of cell edges
         """
         if repair:
-            binary_activation_profile_encoding = self.get_edge_activation_encoding_from_graph()
-            for index, cell_edges_encoded in enumerate(binary_activation_profile_encoding):
-                xu = len(cell_edges_encoded)
+            profile_max_values = self.get_edge_activation_encoding_from_graph()
+            for index, _ in enumerate(profile_max_values):
+                xu = profile_max_values[index]
                 xl = 1
+
                 if encoding[index] > xu or encoding[index] < xl:
                     encoding[index] = np.random.randint(xl, xu+1)
 
@@ -955,9 +976,9 @@ class Son:
             boolean (True) if there is no violation
         """
 
-        binary_activation_profile_encoding = self.get_edge_activation_encoding_from_graph()
-        for index, cell_edges_encoded in enumerate(binary_activation_profile_encoding):
-            xu = len(cell_edges_encoded)
+        max_activation_value = self.get_edge_activation_encoding_from_graph()
+        for index, max_value in enumerate(max_activation_value):
+            xu = max_value
             xl = 1
             if encoding[index] > xu or encoding[index] < xl:
                 return (False)
@@ -990,9 +1011,6 @@ class Son:
 
         self.find_activation_profile_bin_packing(cell_order_2=cell_order_2, bs_order=bs_order,
                                                  bin_packing=bin_packing)
-        result.append(self.get_edge_activation_encoding_from_graph())
-
-        self.save_edge_activation_profile_to_file(result, result_file_name, sheet_name)
 
     ############## visualization methods ####################
 

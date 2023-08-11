@@ -17,6 +17,7 @@ import numpy as np
 from math import cos, sin
 from son_pymoo import AlgorithmEnum, CrossoverEnum, MutationEnum, ObjectiveEnum, RunningMode, SamplingEnum, start_optimization
 from pymoo.decomposition.asf import ASF
+import copy
 
 
 dropdown_menue_options_list = ["macro", "micro", "femto", "pico", "cell", "remove"]
@@ -71,6 +72,8 @@ class Main():
         self.ngen_since_last_evo_reset = 0
         self.selected_node_id = None
         self.moving_users = {}
+        self.queue_flags = {"finished": False, "decision_space": False,
+                            "objective_space": False, "n_gen_since_last_fetch": False, "n_gen": False}
         self.current_save_result_directory = ""
         self.pymoo_message_queue = multiprocessing.Queue()
         self.editor_message_queue = multiprocessing.Queue()
@@ -362,15 +365,10 @@ class Main():
     def node_drag(self, node_id, target_pos: tuple[int, int]):
         target_x = round(target_pos[0] / self.unit_size_x, 2)
         target_y = round(target_pos[1] / self.unit_size_y, 2)
-        self.son.move_node(
+        self.son.move_node_by_pos(
             node_id, (target_x, target_y),
             update_network=False)
         self.topology_changed = True
-
-        if self.running_mode == RunningMode.LIVE.value and self.optimization_running:
-            # apply the currently stored activation profile of the editor with repair
-            self.son.apply_edge_activation_encoding_to_graph(
-                self.activation, repair=True, update_network_attributes=True)
 
     def initialize_moving_users(self):
         user_nodes = [x[0]
@@ -389,14 +387,12 @@ class Main():
 
     def rotate_vector_by_deg(self, vec: np.ndarray, deg: int) -> np.ndarray:
         # rotate vector
-
         theta = np.deg2rad(deg)
         rot = np.array([[cos(theta), -sin(theta)], [sin(theta), cos(theta)]])
         v2 = np.dot(rot, vec)
 
         # normalize vector
         vector_norm = v2 / np.linalg.norm(v2)
-
         return vector_norm
 
     def move_some_users(self):
@@ -406,26 +402,19 @@ class Main():
 
         self.son.initialize_edges()
 
-        # apply the currently stored activation profile of the editor with repair after movement finished
-        if self.topology_changed and len(self.activation) > 0:
-            self.son.apply_edge_activation_encoding_to_graph(
-                self.activation, repair=True, update_network_attributes=True)
-
     def move_one_user(self, user_node_id: str):
 
         # TODO make it performant
         self.update_direction_for_user(user_node_id)
-
-        current_x_pos = self.son.graph.nodes[user_node_id]["pos_x"]
-        current_y_pos = self.son.graph.nodes[user_node_id]["pos_y"]
-        self.son.move_node(user_node_id,
-                           (self.moving_users[user_node_id][0] * self.moving_speed + current_x_pos,
-                            self.moving_users[user_node_id][1] * self.moving_speed + current_y_pos),
-                           update_network=False, initialize_edges=False)
+        self.son.move_node_by_vec(user_node_id,
+                                  (self.moving_users[user_node_id][0] * self.moving_speed,
+                                   self.moving_users[user_node_id][1] * self.moving_speed),
+                                  update_network=False, initialize_edges=False)
 
         self.topology_changed = True
 
     def update_direction_for_user(self, user_node_id: str):
+
         while (self.check_direction_valid(user_node_id) is False):
             new_direction_numpy = self.rotate_vector_by_deg(
                 np.array(self.moving_users[user_node_id]), 30)
@@ -438,8 +427,8 @@ class Main():
 
             next_rssi = self.son.get_rssi_cell(user_node_id, (user_node_id, edge[0]), moving_vector=(
                 self.moving_users[user_node_id][0] * self.moving_speed, self.moving_users[user_node_id][1] * self.moving_speed))
-
-            if next_rssi > self.son.min_rssi:
+            # TODO make movement more robust
+            if next_rssi - 0.2 > self.son.min_rssi:
                 return True
 
         return False
@@ -820,7 +809,7 @@ class Main():
 
     def stop_evo(self):
         self.editor_message_queue.put(
-            {"terminate": True, "son": self.son, "reset": False, "send_results": False})
+            {"terminate": True, "son": False, "reset": False, "send_results": False})
 
     def start_evo(self):
 
@@ -866,8 +855,7 @@ class Main():
                 self.algorithm_param_dic["objectives"],
                 self.algorithm_param_dic["algorithm"],
                 self.son,
-                "datastore/" + self.dropdown_menu_pick_network.selected_option +
-                "/algorithm_config_" + str(result_directory_count) + "/",
+                self.current_save_result_directory + "/",
                 self.pymoo_message_queue,
                 self.editor_message_queue,
                 self.running_mode,
@@ -1020,60 +1008,78 @@ class Main():
         i = decomp.do(nF, 1/weights).argmin()
         return decision_space[i]
 
+    def reset_queue_flags(self):
+        self.queue_flags = {"finished": False, "decision_space": False,
+                            "objective_space": False, "n_gen_since_last_fetch": False, "n_gen": False}
+
     def run(self):
         while True:
             # set time per tick
             dt = self.clock.tick(30)/1000
+
             if self.running_mode == RunningMode.LIVE.value and self.optimization_running:
                 self.dt_runtime += dt
                 self.dt_since_last_history_update += dt
-
-                if self.dt_since_last_history_update >= 1:
-                    self.update_objective_history()
-
                 self.dt_since_last_evo_reset += dt
                 self.dt_since_last_activation_profile_fetch += dt
-
-                # move users
-                self.move_some_users()
 
                 # send fetch data fetch request to process queue
                 if self.n_gen_since_last_fetch >= self.pick_rate_in_n_gen or self.dt_since_last_activation_profile_fetch >= self.pick_rate_in_s:
                     self.editor_message_queue.put(
-                        {"terminate": False, "son": self.son, "reset": False, "send_results": True})
+                        {"terminate": False, "son": False, "reset": False, "send_results": True})
 
                 # trigger evo_reset if current activation profile violates son topology
                 self.trigger_evo_reset_invalid_activation_profile()
 
             # read message queue
             while self.pymoo_message_queue.empty() is False:
-                # TODO dont invoke method calls in here but set boolean flags and call them only onece after
                 callback_obj = self.pymoo_message_queue.get()
                 if callback_obj["finished"] == True:
                     # update dropdowns after normal completion and static mode
-                    self.on_optimization_finished()
+                    self.queue_flags["finished"] = True
 
                 if self.running_mode == RunningMode.LIVE.value:
                     if callback_obj["decision_space"] is not False and callback_obj["objective_space"] is not False:
-                        # -> use ASF selection with weigths to pick one solution
-                        picked_solution = self.select_solution(
-                            decision_space=np.array(callback_obj["decision_space"]),
-                            objective_space=np.array(callback_obj["objective_space"]),
-                            weights=np.array([[0.5, 0.5]]))
-                        self.activation = picked_solution.tolist()
-                        # -> repair solution and apply new activation profile
-                        self.son.apply_edge_activation_encoding_to_graph(
-                            picked_solution.tolist(),
-                            repair=True, update_network_attributes=True)
-                        # reset counters
-                        self.dt_since_last_activation_profile_fetch = 0
-                        # self.n_gen_since_last_fetch = 0
+                        self.queue_flags["decision_space"] = callback_obj["decision_space"]
+                        self.queue_flags["objective_space"] = callback_obj["objective_space"]
 
                     if callback_obj["n_gen_since_last_fetch"] is not False:
-                        self.n_gen_since_last_fetch = callback_obj["n_gen_since_last_fetch"]
+                        self.queue_flags["n_gen_since_last_fetch"] = callback_obj["n_gen_since_last_fetch"]
 
                     if callback_obj["n_gen"] is not False:
-                        self.ngen_since_last_evo_reset = callback_obj["n_gen"]
+                        self.queue_flags["n_gen"] = callback_obj["n_gen"]
+
+            # react to queue messages
+            if self.queue_flags["decision_space"] is not False and self.queue_flags["objective_space"] is not False:
+                # -> use ASF selection with weigths to pick one solution
+                picked_solution = self.select_solution(
+                    decision_space=np.array(self.queue_flags["decision_space"]),
+                    objective_space=np.array(self.queue_flags["objective_space"]),
+                    weights=np.array([[0.5, 0.5]]))
+                self.activation = picked_solution.tolist()
+                self.dt_since_last_activation_profile_fetch = 0
+
+            if self.queue_flags["n_gen_since_last_fetch"] is not False:
+                self.n_gen_since_last_fetch = self.queue_flags["n_gen_since_last_fetch"]
+
+            if self.queue_flags["n_gen"] is not False:
+                self.ngen_since_last_evo_reset = self.queue_flags["n_gen"]
+
+            if self.running_mode == RunningMode.LIVE.value and self.optimization_running:
+                if self.dt_since_last_history_update >= 1:
+                    self.update_objective_history()
+                # move users
+                self.move_some_users()
+                # apply current activation profile
+                if len(self.activation) > 0:
+                    self.son.apply_edge_activation_encoding_to_graph(
+                        self.activation, repair=True, update_network_attributes=True)
+
+            if self.queue_flags["finished"]:
+                self.on_optimization_finished()
+
+            # reset queue flags
+            self.reset_queue_flags()
 
             # handle events
             for event in pygame.event.get():
