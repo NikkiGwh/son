@@ -27,6 +27,7 @@ from pymoo.operators.crossover.ux import UniformCrossover
 from pymoo.operators.crossover.pntx import SinglePointCrossover, TwoPointCrossover
 
 from pymoo.termination import get_termination
+import networkx as nx
 
 
 class ObjectiveEnum(Enum):
@@ -134,11 +135,6 @@ class SeedSampling(Sampling):
 
             for j in range(problem.n_var):
                 if self.seed_pop[i][j] > problem.xu[j] or self.seed_pop[i][j] < problem.xl[j]:
-                    if problem.xl[j] >= problem.xu[j]+1:
-                        print("-----pymoo-------")
-                        print(problem.xl)
-                        print(problem.xu)
-                        print("----------")
                     X[i][j] = np.random.randint(problem.xl[j], problem.xu[j]+1)
                 else:
                     X[i][j] = self.seed_pop[i][j]
@@ -207,13 +203,14 @@ class SonDublicateElimination(ElementwiseDuplicateElimination):
 
 class MyCallback(Callback):
 
-    def __init__(self, pymoo_message_queue: multiprocessing.Queue,
-                 editor_message_queue: multiprocessing.Queue, son: Son, running_mode: str) -> None:
+    def __init__(
+            self, pymoo_message_queue: multiprocessing.Queue,
+            editor_message_queue: multiprocessing.Queue, graph: nx.Graph, running_mode: str) -> None:
         super().__init__()
 
         self.data["external_termination"] = False
         self.data["external_reset"] = False
-        self.data["son"] = son
+        self.data["graph"] = graph
         self.pymoo_message_queue = pymoo_message_queue
         self.editor_message_queue = editor_message_queue
         self.running_mode = running_mode
@@ -226,7 +223,6 @@ class MyCallback(Callback):
             # read editor message queue
             while self.editor_message_queue.empty() is False:
                 callback_obj = self.editor_message_queue.get()
-                # TODO das setzen des neuen sons muss woanders hin -> in while loop denke ich
 
                 if callback_obj["terminate"] == True:
                     queue_filled = True
@@ -239,10 +235,11 @@ class MyCallback(Callback):
                          "n_gen": 0
                          })
                     algorithm.termination.terminate()
-                elif callback_obj["reset"] == True and callback_obj["son"] is not False:
+                elif callback_obj["reset"] == True and callback_obj["graph"] is not False:
                     queue_filled = True
                     self.data["external_reset"] = True
-                    self.data["son"] = callback_obj["son"]
+                    self.data["graph"] = callback_obj["graph"]
+
                     self.pymoo_message_queue.put(
                         {"decision_space": algorithm.pop.get("X"),
                          "objective_space": algorithm.pop.get("F"),
@@ -273,8 +270,7 @@ class MyCallback(Callback):
                      })
 
 ################################ main ###################
-# TODO add weigthing parameters for objectives with augumented scalarization function
-# TODO add parameters for different termination criteria
+# TODO take SOn as arguemtn away and replace with dicts, graph or even array
 
 
 def start_optimization(
@@ -304,7 +300,7 @@ def start_optimization(
     verbose = True
     history = True
     if running_mode == RunningMode.LIVE.value:
-        verbose = False
+        verbose = True
         history = False
     else:
         verbose = True
@@ -372,14 +368,22 @@ def start_optimization(
         save_history=history,
         callback=MyCallback(
             pymoo_message_queue=pymoo_message_queue, editor_message_queue=editor_message_queue,
-            son=son_obj, running_mode=running_mode))
+            graph=son_obj.graph, running_mode=running_mode))
 
     if running_mode == RunningMode.LIVE.value:
         while result.algorithm.callback.data["external_reset"] and result.algorithm.callback.data["external_termination"] == False:
 
             # reinitialize algorithm config
+
+            new_graph: nx.Graph = nx.from_edgelist(
+                result.algorithm.callback.data["graph"]["edge_list_with_attributes"])
+            nx.set_node_attributes(
+                new_graph, result.algorithm.callback.data["graph"]["node_dic_with_attributes"])
+            son_obj.graph = new_graph
+
             sonProblem = SonProblemElementWise(
-                obj_dict=objectives, son=result.algorithm.callback.data["son"])
+                obj_dict=objectives, son=son_obj)
+
             samplingConfig = SeedSampling(seed_pop=result.pop.get("X"))
 
             if (algorithm == AlgorithmEnum.NSGA3.value):
@@ -401,13 +405,13 @@ def start_optimization(
                                        mutation=mutationConfig,
                                        eliminate_duplicates=eliminate_duplicates,
                                        n_generations=n_generations)
-            result = minimize(
-                sonProblem, pymooAlgorithm, termination=termination_obj, seed=1, verbose=verbose,
-                save_history=history,
-                callback=MyCallback(
-                    pymoo_message_queue=pymoo_message_queue,
-                    editor_message_queue=editor_message_queue, son=result.algorithm.callback.data
-                    ["son"], running_mode=running_mode))
+            result = minimize(sonProblem, pymooAlgorithm, termination=termination_obj, seed=1,
+                              verbose=verbose, save_history=history,
+                              callback=MyCallback(
+                                  pymoo_message_queue=pymoo_message_queue,
+                                  editor_message_queue=editor_message_queue,
+                                  graph=son_obj.graph,
+                                  running_mode=running_mode))
 
         pymoo_message_queue.put(
             {"decision_space": result.X,
@@ -482,7 +486,7 @@ def start_optimization(
 
     pymoo_message_queue.put({"decision_space": False,
                              "objective_space": False,
-                            "finished": True,
+                             "finished": True,
                              "n_gen_since_last_fetch": False,
                              "n_gen": False
                              })

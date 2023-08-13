@@ -427,8 +427,8 @@ class Main():
 
             next_rssi = self.son.get_rssi_cell(user_node_id, (user_node_id, edge[0]), moving_vector=(
                 self.moving_users[user_node_id][0] * self.moving_speed, self.moving_users[user_node_id][1] * self.moving_speed))
-            # TODO make movement more robust
-            if next_rssi - 0.2 > self.son.min_rssi:
+
+            if next_rssi > self.son.min_rssi:
                 return True
 
         return False
@@ -452,8 +452,20 @@ class Main():
                 self.dt_since_last_evo_reset = 0
                 self.ngen_since_last_evo_reset = 0
                 self.topology_changed = False
+
+                edge_list_with_attributes = self.son.graph.edges
+                node_dic_with_attributes = {}
+
+                for _, node in enumerate(self.son.graph.nodes.data()):
+                    node_dic_with_attributes[node[0]] = node[1]
+
                 self.editor_message_queue.put(
-                    {"terminate": False, "son": self.son, "reset": True, "send_results": False})
+                    {"terminate": False,
+                     "graph":
+                     {"edge_list_with_attributes": edge_list_with_attributes,
+                       "node_dic_with_attributes": node_dic_with_attributes
+                      },
+                     "reset": True, "send_results": False})
 
     def on_left_click(self, target_pos: tuple[int, int]):
         node_id = self.selected_node_id
@@ -809,7 +821,7 @@ class Main():
 
     def stop_evo(self):
         self.editor_message_queue.put(
-            {"terminate": True, "son": False, "reset": False, "send_results": False})
+            {"terminate": True, "graph": False, "reset": False, "send_results": False})
 
     def start_evo(self):
 
@@ -1026,7 +1038,7 @@ class Main():
                 # send fetch data fetch request to process queue
                 if self.n_gen_since_last_fetch >= self.pick_rate_in_n_gen or self.dt_since_last_activation_profile_fetch >= self.pick_rate_in_s:
                     self.editor_message_queue.put(
-                        {"terminate": False, "son": False, "reset": False, "send_results": True})
+                        {"terminate": False, "graph": False, "reset": False, "send_results": True})
 
                 # trigger evo_reset if current activation profile violates son topology
                 self.trigger_evo_reset_invalid_activation_profile()

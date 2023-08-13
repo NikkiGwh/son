@@ -121,7 +121,6 @@ class Son:
         # only add edges for cell-bs pairs which hav minimum rssi signal strength
         for _, cell in enumerate(
                 filter(self.filter_user_nodes, self.graph.nodes.data())):
-            count = 0
             for _, bs_node in enumerate(
                     filter(self.filter_bs_nodes, self.graph.nodes.data())):
                 current_rssi = self.get_rssi_cell(cell[0], (cell[0], bs_node[0]))
@@ -129,15 +128,13 @@ class Son:
                     (cell[1]["pos_x"], cell[1]["pos_y"]), (bs_node[1]["pos_x"], bs_node[1]["pos_y"]))
 
                 if current_rssi >= self.min_rssi:
-                    count += 1
+
                     attribute_dic = {}
                     attribute_dic["rssi"] = current_rssi
                     attribute_dic["distance"] = current_distance
                     attribute_dic["active"] = False
                     edge_list_with_attributes.append(
                         (cell[0], bs_node[0], attribute_dic))
-            if (count == 0):
-                print("WARNING ----- user ohne connections !!!!!!")
 
         self.graph.add_edges_from(edge_list_with_attributes)
 
@@ -256,7 +253,7 @@ class Son:
             if len(connected_users) == 0:
                 # calculation for inactive users
                 bs_node[1]["active"] = False
-                # TODO change
+                # TODO change total power calculation
                 self.graph.nodes[bs_node[0]]["total_power"] = self.network_node_params[bs_node[1][
                     "type"]]["standby_power"]
                # self.graph.nodes[bs_node[0]]["energy_efficiency"] = 0
@@ -910,8 +907,6 @@ class Son:
             cell_encoding_count = 0
             for _, edge in enumerate(self.graph[cell_node[0]].items()):
                 cell_encoding_count += 1
-            if (cell_encoding_count == 0):
-                print("keine edge!!!!!!!!!!!!!!!!!!!!")
             cell_encoding_list.append(cell_encoding_count)
         return cell_encoding_list
 
