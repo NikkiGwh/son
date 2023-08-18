@@ -1036,15 +1036,14 @@ class Son:
             'node_size': node_sizes,
             "pos": pos,
             "edgecolors": node_edge_colors,
-            "label": ["hallo", "hallo", "hallo"],
         }
 
         label_dic = {}
         for _, user_node in enumerate(filter(self.filter_user_nodes, self.graph.nodes.data())):
-            label_dic[user_node[0]] = user_node[1]["rssi"]
+            label_dic[user_node[0]] = user_node[0]
 
         for _, bs_node in enumerate(filter(self.filter_bs_nodes, self.graph.nodes.data())):
-            label_dic[bs_node[0]] = str(bs_node[1]["load"]) + "%"
+            label_dic[bs_node[0]] = str(bs_node[0])
 
         label_positions: dict[str, list[int]] = {}
 
@@ -1054,15 +1053,21 @@ class Son:
         plt.title(f"network")
         nx.drawing.nx_pylab.draw_networkx_edges(self.graph, **options_edges)
         nx.drawing.nx_pylab.draw_networkx_nodes(self.graph, **options_nodes)
-        nx.drawing.nx_pylab.draw_networkx_labels(
-            self.graph, label_positions, label_dic, font_color="black")
+        # nx.drawing.nx_pylab.draw_networkx_labels(
+        #     self.graph, label_positions, label_dic, font_color="black")
         plt.show()
 
 
 ################# script main #######################
 
 def main():
+    # son = Son(adjacencies_file_name="datastore/hetNet/algorithm_config_3STATIC/ind_result_1.json",
+              parameter_config_file_name="datastore/hetNet/hetNet_network_config.json")
+
+    # son.draw_current_network()
     print("nothing")
+    # nx.write_gml(son.graph, "graph.gml")
+    # nx.write_graphml_lxml(son.graph, "graph.graphml")
 
 
 if __name__ == "__main__":
