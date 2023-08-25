@@ -1,5 +1,5 @@
 WINDOW_HEIGHT = 900
-WINDOW_WIDTH = 1400
+WINDOW_WIDTH = 1500
 GAME_HEIGHT = 900
 GAME_WIDTH = 900
 
@@ -13,6 +13,7 @@ style = {
                 "femto": "yellow",
                 "pico": "lime",
                 "cell": "black",
+                "moving": (178,6,255,1),
                 "inactive": "grey",
                 "overload": "red"
             }
@@ -33,7 +34,7 @@ style = {
             "active": "green"
         },
         "sizes": {
-            "edge_width":{
+            "edge_width": {
                 "active": 3,
                 "inactive": 1
             }

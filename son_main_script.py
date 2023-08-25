@@ -1061,8 +1061,8 @@ class Son:
 ################# script main #######################
 
 def main():
-    # son = Son(adjacencies_file_name="datastore/hetNet/algorithm_config_3STATIC/ind_result_1.json",
-              parameter_config_file_name="datastore/hetNet/hetNet_network_config.json")
+    #  son = Son(adjacencies_file_name="datastore/hetNet/algorithm_config_3STATIC/ind_result_1.json",
+    #           parameter_config_file_name="datastore/hetNet/hetNet_network_config.json")
 
     # son.draw_current_network()
     print("nothing")

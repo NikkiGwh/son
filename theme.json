@@ -51,8 +51,12 @@
   },
   "#ui_container": {
     "colours": {
-      "normal_bg": "black",
       "dark_bg": "black"
+    }
+  },
+  "#ui_container_live_config": {
+    "colours": {
+      "dark_bg": "#111b45"
     }
   }
 }

@@ -21,7 +21,8 @@ import copy
 
 
 dropdown_menue_options_list = ["macro", "micro", "femto", "pico", "cell", "remove"]
-text_input_number_type_characters = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "."]
+text_input_float_number_type_characters = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "."]
+text_input_integer_number_type_characters = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
 
 default_algorithm_param_config = {
     "pop_size": 100,
@@ -34,6 +35,13 @@ default_algorithm_param_config = {
     "eliminate_duplicates": "True",
     "objectives": [ObjectiveEnum.AVG_DL_RATE.value, ObjectiveEnum.ENERGY_EFFICIENCY.value],
     "algorithm": AlgorithmEnum.NSGA2.value,
+    "pick_rate_in_n_gen": 5,
+    "pick_rate_in_s": 20,
+    "moving_speed": 0.1,
+    "reset_rate_in_s": 20,
+    "reset_rate_in_ngen": 5,
+    "reset_delay_in_s": 10,
+    "moving_selection_percent": 30
 }
 
 
@@ -61,17 +69,19 @@ class Main():
         self.optimization_running = False
         self.dt_since_last_activation_profile_fetch = 0
         self.n_gen_since_last_fetch = 0
-        self.moving_speed = 0.1
-        self.pick_rate_in_s = 20
-        self.pick_rate_in_n_gen = 5
-        self.reset_rate_in_s = 20
-        self.reset_delay_in_s = 10
-        self.reset_rate_in_ngen = 5
+        # self.moving_speed = default_algorithm_param_config["moving_speed"]
+        # self.pick_rate_in_s = default_algorithm_param_config["pick_rate_in_s"]
+        # self.pick_rate_in_n_gen = default_algorithm_param_config["pick_rate_in_n_gen"]
+        # self.reset_rate_in_s = default_algorithm_param_config["reset_delay_in_s"]
+        # self.reset_delay_in_s = default_algorithm_param_config["reset_delay_in_s"]
+        # self.reset_rate_in_ngen = default_algorithm_param_config["reset_rate_in_ngen"]
+        # self.moving_selection_percent = default_algorithm_param_config["moving_selection_percent"]
         self.dt_since_last_evo_reset = 0
         self.objective_history = []
         self.ngen_since_last_evo_reset = 0
         self.selected_node_id = None
         self.moving_users = {}
+        self.show_moving_users = False
         self.queue_flags = {"finished": False, "decision_space": False,
                             "objective_space": False, "n_gen_since_last_fetch": False, "n_gen": False}
         self.current_save_result_directory = ""
@@ -90,6 +100,7 @@ class Main():
         self.unit_size_x, self.unit_size_y = (
             math.trunc(GAME_WIDTH / max_value),
             math.trunc(GAME_HEIGHT / max_value))
+
         self.network_params_dic = son.network_node_params
         self.algorithm_param_dic = default_algorithm_param_config
         # GUI
@@ -169,7 +180,12 @@ class Main():
                         (100, 30)),
             self.manager, self.ui_container, placeholder_text="max beams",
             initial_text=str(self.network_params_dic[self.right_mouse_action]["antennas"]))
-        self.input_antennas.set_allowed_characters(text_input_number_type_characters)
+        self.input_antennas.set_allowed_characters(text_input_float_number_type_characters)
+
+        self.input_network_name = pygame_gui.elements.UITextEntryLine(
+            pygame.Rect((320, 50),
+                        (100, 30)),
+            self.manager, self.ui_container, placeholder_text="network name")
 
         self.input_wave_length_label = pygame_gui.elements.UILabel(pygame.Rect(
             (20, 80), (-1, 30)), "wave length in m", self.manager, self.ui_container)
@@ -178,42 +194,48 @@ class Main():
                         (100, 30)),
             self.manager, self.ui_container, placeholder_text="wave length",
             initial_text=str(self.network_params_dic[self.right_mouse_action]["wave_length"]))
-        self.input_wave_length.set_allowed_characters(text_input_number_type_characters)
+        self.input_wave_length.set_allowed_characters(text_input_float_number_type_characters)
+
+        self.save_button = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect((320, 80), (100, 30)),
+            object_id="#save_button", text='save', manager=self.manager, container=self.
+            ui_container)
 
         self.input_channel_bandwidth_label = pygame_gui.elements.UILabel(pygame.Rect(
             (20, 110), (-1, 30)), "channel bandwidth in HZ", self.manager, self.ui_container)
         self.input_channel_bandwidth = pygame_gui.elements.UITextEntryLine(pygame.Rect(
             (220, 110), (100, 30)), self.manager, self.ui_container, placeholder_text="bandwidth",
             initial_text=str(self.network_params_dic[self.right_mouse_action]["channel_bandwidth"]))
-        self.input_channel_bandwidth.set_allowed_characters(text_input_number_type_characters)
+        self.input_channel_bandwidth.set_allowed_characters(text_input_float_number_type_characters)
 
         self.input_transmission_power_label = pygame_gui.elements.UILabel(pygame.Rect(
             (20, 140), (-1, 30)), "transmission power in Watt", self.manager, self.ui_container)
         self.input_transmission_power = pygame_gui.elements.UITextEntryLine(pygame.Rect(
             (220, 140), (100, 30)), self.manager, self.ui_container, placeholder_text="tx power",
             initial_text=str(self.network_params_dic[self.right_mouse_action]["tx_power"]))
-        self.input_transmission_power.set_allowed_characters(text_input_number_type_characters)
+        self.input_transmission_power.set_allowed_characters(
+            text_input_float_number_type_characters)
 
         self.input_static_power_label = pygame_gui.elements.UILabel(pygame.Rect(
             (20, 170), (-1, 30)), "static power in Watt", self.manager, self.ui_container)
         self.input_static_power = pygame_gui.elements.UITextEntryLine(pygame.Rect(
             (220, 170), (100, 30)), self.manager, self.ui_container, placeholder_text="static power",
             initial_text=str(self.network_params_dic[self.right_mouse_action]["static_power"]))
-        self.input_static_power.set_allowed_characters(text_input_number_type_characters)
+        self.input_static_power.set_allowed_characters(text_input_float_number_type_characters)
 
         self.input_standby_power_label = pygame_gui.elements.UILabel(pygame.Rect(
             (20, 200), (-1, 30)), "standby power in Watt", self.manager, self.ui_container)
         self.input_standby_power = pygame_gui.elements.UITextEntryLine(pygame.Rect(
             (220, 200), (100, 30)), self.manager, self.ui_container, placeholder_text="standby power",
             initial_text=str(self.network_params_dic[self.right_mouse_action]["standby_power"]))
-        self.input_standby_power.set_allowed_characters(text_input_number_type_characters)
+        self.input_standby_power.set_allowed_characters(text_input_float_number_type_characters)
 
         self.input_frequency_label = pygame_gui.elements.UILabel(pygame.Rect(
             (20, 230), (-1, 30)), "frequency in HZ", self.manager, self.ui_container)
         self.input_frequency = pygame_gui.elements.UITextEntryLine(pygame.Rect(
             (220, 230), (100, 30)), self.manager, self.ui_container, placeholder_text="frequency",
             initial_text=str(self.network_params_dic[self.right_mouse_action]["frequency"]))
-        self.input_frequency.set_allowed_characters(text_input_number_type_characters)
+        self.input_frequency.set_allowed_characters(text_input_float_number_type_characters)
 
         # algorithm params
         self.create_algo_param_ui_elements()
@@ -232,48 +254,25 @@ class Main():
             manager=self.manager, container=self.ui_container)
         self.evo_stop_button.disable()
 
-        self.dropdown_pick_algo_config = pygame_gui.elements.UIDropDownMenu(
-            options_list=self.get_configs_for_current_network(),
-            starting_option=self.get_configs_for_current_network()[0],
+        self.dropdown_pick_mode = pygame_gui.elements.UIDropDownMenu(
+            options_list=[item.value for item in RunningMode],
+            starting_option=self.running_mode,
             relative_rect=pygame.Rect((20, 620), (200, 30)),
             manager=self.manager,
             container=self.ui_container,
         )
-        self.dropdown_pick_algo_config.disable()
 
-        self.dropdown_pick_result = pygame_gui.elements.UIDropDownMenu(
-            options_list=self.get_results_for_current_config(),
-            starting_option=self.get_results_for_current_config()[0],
-            relative_rect=pygame.Rect((20, 650), (200, 30)),
-            manager=self.manager,
-            container=self.ui_container,
-        )
-        self.dropdown_pick_result.disable()
-
-        self.dropdown_pick_mode = pygame_gui.elements.UIDropDownMenu(
-            options_list=[item.value for item in RunningMode],
-            starting_option=self.running_mode,
-            relative_rect=pygame.Rect((20, 680), (200, 30)),
-            manager=self.manager,
-            container=self.ui_container,
-        )
-
-        self.input_network_name = pygame_gui.elements.UITextEntryLine(
-            pygame.Rect((-120, -120),
-                        (100, 30)),
-            self.manager, self.ui_container, placeholder_text="network name",
-            anchors={"right": "right", "bottom": "bottom"})
-
-        self.save_button = pygame_gui.elements.UIButton(
-            relative_rect=pygame.Rect((-120, -70), (100, 30)),
-            object_id="#save_button", text='save', manager=self.manager, container=self.
-            ui_container, anchors={"right": "right", "bottom": "bottom"})
+        # live config elements
+        self.create_live_param_ui_elements()
+        self.ui_container_live_config.disable()
 
     def disable_ui(self):
         self.ui_container.disable()
+        self.ui_container_live_config.disable()
 
     def enable_ui(self):
         self.ui_container.enable()
+        self.ui_container_live_config.enable()
 
     def get_configs_for_current_network(self) -> list[str]:
         result_list = ["from file"]
@@ -285,6 +284,18 @@ class Main():
             for item in directory_contents:
                 if "algorithm_config" in item:
                     result_list.append(item)
+
+        return result_list
+
+    def get_moving_selections_for_current_network(self) -> list[str]:
+        result_list = ["from file"]
+
+        if self.dropdown_menu_pick_network.selected_option != "from file":
+            directory_contents = os.listdir(
+                "datastore/" + self.dropdown_menu_pick_network.selected_option + "/moving_selections")
+
+            for item in directory_contents:
+                result_list.append(item)
 
         return result_list
 
@@ -312,7 +323,7 @@ class Main():
 
         return (max_x, max_y)
 
-    def draw_whiteboard(self):
+    def draw_network(self):
         self.display_surface.blit(self.background, (0, 0))
         self.draw_edges()
         self.draw_nodes()
@@ -332,13 +343,19 @@ class Main():
                     style["edges"]["sizes"]["edge_width"][activation])
 
     def draw_nodes(self):
+
         for _, node in enumerate(self.son.graph.nodes.data()):
             node_type = node[1]["type"]
             activation = False if node[1]["type"] != "cell" and node[1]["active"] == False else True
-            node_color_key = "inactive" if not activation else node_type
+
+            if self.show_moving_users:
+                node_color_key = "inactive" if not activation else node_type if node[
+                    0] not in self.moving_users else "moving"
+            else:
+                node_color_key = "inactive" if not activation else node_type
+
             pygame.draw.circle(
-                self.display_surface, pygame.colordict.THECOLORS
-                [style["nodes"]["colors"]["fill"][node_color_key]],
+                self.display_surface, style["nodes"]["colors"]["fill"][node_color_key],
                 (node[1]["pos_x"] * self.unit_size_x, node[1]["pos_y"] * self.unit_size_y),
                 style["nodes"]["sizes"]["radius"][node_type])
 
@@ -371,12 +388,32 @@ class Main():
         self.topology_changed = True
 
     def initialize_moving_users(self):
+
+        percentage = self.algorithm_param_dic["moving_selection_percent"]
+
         user_nodes = [x[0]
                       for x in list(
                           filter(self.son.filter_user_nodes, self.son.graph.nodes.data()))]
 
+        if len(user_nodes) <= 0:
+            self.popup.kill()
+            self.popup = CustomConfirmationDialog(
+                rect=pygame.Rect(GAME_WIDTH + 20, 20, 100, 100),
+                blocking=True,
+                manager=self.manager,
+                window_title="No users",
+                action_short_name="ok",
+                action_long_desc="add some users",
+                visible=True,
+
+            )
+            return
+        self.moving_users = {}
         # randomly select x % of the useres for movement and dict with ids and moving vector
-        selection_list = np.random.choice([1, 0], size=len(user_nodes), p=[0.3, 0.7])
+        selection_list = np.random.choice(
+            [1, 0],
+            size=len(user_nodes),
+            p=[percentage / 100, 1 - percentage / 100])
         selection_id_list = [x for index, x in enumerate(user_nodes) if selection_list[index] == 1]
 
         # initialize moving directions randomly
@@ -406,10 +443,11 @@ class Main():
 
         # TODO make it performant
         self.update_direction_for_user(user_node_id)
-        self.son.move_node_by_vec(user_node_id,
-                                  (self.moving_users[user_node_id][0] * self.moving_speed,
-                                   self.moving_users[user_node_id][1] * self.moving_speed),
-                                  update_network=False, initialize_edges=False)
+        self.son.move_node_by_vec(
+            user_node_id,
+            (self.moving_users[user_node_id][0] * self.algorithm_param_dic["moving_speed"],
+             self.moving_users[user_node_id][1] * self.algorithm_param_dic["moving_speed"]),
+            update_network=False, initialize_edges=False)
 
         self.topology_changed = True
 
@@ -425,8 +463,12 @@ class Main():
 
         for _, edge in enumerate(self.son.graph[user_node_id].items()):
 
-            next_rssi = self.son.get_rssi_cell(user_node_id, (user_node_id, edge[0]), moving_vector=(
-                self.moving_users[user_node_id][0] * self.moving_speed, self.moving_users[user_node_id][1] * self.moving_speed))
+            next_rssi = self.son.get_rssi_cell(
+                user_node_id, (user_node_id, edge[0]),
+                moving_vector=(self.moving_users[user_node_id][0] * self.algorithm_param_dic
+                               ["moving_speed"],
+                               self.moving_users[user_node_id][1] * self.algorithm_param_dic
+                               ["moving_speed"]))
 
             if next_rssi > self.son.min_rssi:
                 return True
@@ -442,7 +484,7 @@ class Main():
 
     def trigger_evo_reset_invalid_activation_profile(self):
         # invoke evo_reset if threshhold is met
-        if self.dt_since_last_evo_reset >= self.reset_rate_in_s or self.ngen_since_last_evo_reset >= self.reset_rate_in_ngen and self.dt_since_last_evo_reset >= self.reset_delay_in_s:
+        if self.dt_since_last_evo_reset >= self.algorithm_param_dic["reset_rate_in_s"] or self.ngen_since_last_evo_reset >= self.algorithm_param_dic["reset_rate_in_ngen"] and self.dt_since_last_evo_reset >= self.algorithm_param_dic["reset_delay_in_s"]:
             # check if current activation profile is valid
             # or someone has moved since last call
             if (len(
@@ -463,7 +505,7 @@ class Main():
                     {"terminate": False,
                      "graph":
                      {"edge_list_with_attributes": edge_list_with_attributes,
-                       "node_dic_with_attributes": node_dic_with_attributes
+                      "node_dic_with_attributes": node_dic_with_attributes
                       },
                      "reset": True, "send_results": False})
 
@@ -526,9 +568,13 @@ class Main():
             if node_id:
                 self.son.remove_node(node_id=node_id, update_network=False)
 
-    def onclick_checkbox(self):
+    def onclick_show_edges_checkbox(self):
         self.show_edges_checkbox_active = not self.show_edges_checkbox_active
         self.show_edges_checkbox.set_text("hide" if self.show_edges_checkbox_active else "show")
+
+    def show_moving_selection_checkbox(self):
+        self.show_moving_users = not self.show_moving_users
+        self.show_moving_selection_button.set_text("hide" if self.show_moving_users else "show")
 
     def apply_params_from_text_inputs(self):
         self.son.apply_network_node_attributes(self.network_params_dic)
@@ -588,6 +634,14 @@ class Main():
             self.algorithm_param_dic["n_offsprings"] = float(event.text)
         if event.ui_element == self.input_pop_size:
             self.algorithm_param_dic["pop_size"] = float(event.text)
+        if event.ui_element == self.input_resetting_rate:
+            self.algorithm_param_dic["reset_rate_in_ngen"] = float(event.text)
+        if event.ui_element == self.input_picking_rate:
+            self.algorithm_param_dic["pick_rate_in_n_gen"] = float(event.text)
+        if event.ui_element == self.input_velocity:
+            self.algorithm_param_dic["moving_speed"] = float(event.text)
+        if event.ui_element == self.input_create_movement_selection_percentage:
+            self.algorithm_param_dic["moving_selection_percent"] = float(event.text)
 
     def on_dropdown_pick_network_changed(self, event: pygame.Event):
         if event.text != "from file":
@@ -612,7 +666,7 @@ class Main():
             self.dropdown_pick_algo_config = pygame_gui.elements.UIDropDownMenu(
                 options_list=self.get_configs_for_current_network(),
                 starting_option=self.get_configs_for_current_network()[0],
-                relative_rect=pygame.Rect((20, 620), (200, 30)),
+                relative_rect=pygame.Rect((320, 290), (200, 30)),
                 manager=self.manager,
                 container=self.ui_container,
             )
@@ -621,15 +675,26 @@ class Main():
             self.dropdown_pick_result = pygame_gui.elements.UIDropDownMenu(
                 options_list=self.get_results_for_current_config(),
                 starting_option=self.get_results_for_current_config()[0],
-                relative_rect=pygame.Rect((20, 650), (200, 30)),
+                relative_rect=pygame.Rect((320, 320), (200, 30)),
                 manager=self.manager,
                 container=self.ui_container,
             )
+            # update moving_selections dropdown
+            self.dropdown_moving_selection.kill()
+            self.dropdown_moving_selection = pygame_gui.elements.UIDropDownMenu(
+                options_list=self.get_moving_selections_for_current_network(),
+                starting_option=self.get_moving_selections_for_current_network()[0],
+                relative_rect=pygame.Rect((220, 150), (200, 30)),
+                manager=self.manager,
+                container=self.ui_container_live_config,
+            )
+            self.ui_container_live_config.enable()
         else:
             self.dropdown_pick_algo_config.disable()
             self.dropdown_pick_result.disable()
+            self.ui_container_live_config.disable()
             self.son = Son()
-        return
+        self.moving_users = {}
 
     def on_dropdown_input_algorithm_config_changed(self, event: pygame.Event, param_key: str):
         self.algorithm_param_dic[param_key] = event.text
@@ -659,16 +724,20 @@ class Main():
                 self.input_n_offsprings.kill()
                 self.input_pop_size.kill()
                 self.input_eliminate_duplicates.kill()
-                self.create_algo_param_ui_elements()
-                # update pick result dropdown
                 self.dropdown_pick_result.kill()
-                self.dropdown_pick_result = pygame_gui.elements.UIDropDownMenu(
-                    options_list=self.get_results_for_current_config(),
-                    starting_option=self.get_results_for_current_config()[0],
-                    relative_rect=pygame.Rect((20, 650), (200, 30)),
-                    manager=self.manager,
-                    container=self.ui_container,
-                )
+                self.create_algo_param_ui_elements(creata_dropdown_pick_algo_config=False)
+
+                self.ui_container_live_config.kill()
+                self.create_live_param_ui_elements()
+
+    def on_dropdown_moving_selection_changed(self, event: pygame.Event):
+        if event.text == "from file":
+            self.moving_users = {}
+        else:
+            with open("datastore/" + self.dropdown_menu_pick_network.selected_option + "/moving_selections/" + event.text, 'r', encoding="utf-8") as openfile:
+                # Reading from json file
+                self.moving_users = json.load(openfile)
+                # update all algorithm config inputs
 
     def on_dropdown_pick_result_changed(self, event: pygame.Event):
         # Opening json file
@@ -682,27 +751,112 @@ class Main():
 
         self.running_mode = event.text
 
-    def create_algo_param_ui_elements(self):
+    def create_live_param_ui_elements(self):
+        self.ui_container_live_config = pygame_gui.elements.UIPanel(
+            pygame.Rect((GAME_WIDTH, 650), (WINDOW_WIDTH - GAME_WIDTH, WINDOW_HEIGHT - 650)),
+            object_id="#ui_container_live_config")
+
+        self.input_resetting_rate_label = pygame_gui.elements.UILabel(pygame.Rect(
+            (20, 0), (-1, 30)), "resetting rate in nGen", self.manager, self.ui_container_live_config)
+        self.input_resetting_rate = pygame_gui.elements.UITextEntryLine(
+            pygame.Rect((220, 0),
+                        (100, 30)),
+            self.manager, self.ui_container_live_config, placeholder_text="resetting rate",
+            initial_text=str(self.algorithm_param_dic["reset_rate_in_ngen"]))
+        self.input_resetting_rate.set_allowed_characters(text_input_integer_number_type_characters)
+
+        self.input_picking_rate_label = pygame_gui.elements.UILabel(pygame.Rect(
+            (20, 30), (-1, 30)), "picking rate in nGen", self.manager, self.ui_container_live_config)
+        self.input_picking_rate = pygame_gui.elements.UITextEntryLine(
+            pygame.Rect((220, 30),
+                        (100, 30)),
+            self.manager, self.ui_container_live_config, placeholder_text="picking rate",
+            initial_text=str(self.algorithm_param_dic["pick_rate_in_n_gen"]))
+        self.input_picking_rate.set_allowed_characters(text_input_integer_number_type_characters)
+
+        self.input_velocity_label = pygame_gui.elements.UILabel(pygame.Rect(
+            (20, 60), (-1, 30)), "velocity", self.manager, self.ui_container_live_config)
+        self.input_velocity = pygame_gui.elements.UITextEntryLine(
+            pygame.Rect((220, 60),
+                        (100, 30)),
+            self.manager, self.ui_container_live_config, placeholder_text="velocity",
+            initial_text=str(self.algorithm_param_dic["moving_speed"]))
+        self.input_velocity.set_allowed_characters(text_input_integer_number_type_characters)
+
+        self.create_movement_selection_button = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect((20, 90),
+                                      (-1, 30)),
+            text='create selection %', manager=self.manager,
+            container=self.ui_container_live_config)
+        self.input_create_movement_selection_percentage = pygame_gui.elements.UITextEntryLine(
+            pygame.Rect((220, 90),
+                        (100, 30)),
+            self.manager, self.ui_container_live_config,
+            initial_text=str(self.algorithm_param_dic["moving_selection_percent"]))
+        self.input_create_movement_selection_percentage.set_allowed_characters(
+            text_input_float_number_type_characters)
+        self.show_moving_selection_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
+            (330, 90), (-1, 30)), text="show", manager=self.manager, container=self.ui_container_live_config)
+
+        self.save_moving_selection_button = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect((20, 120),
+                                      (-1, 30)),
+            text='save current selection', manager=self.manager,
+            container=self.ui_container_live_config)
+        self.input_moving_selection_name = pygame_gui.elements.UITextEntryLine(
+            pygame.Rect((220, 120),
+                        (150, 30)),
+            self.manager, self.ui_container_live_config, placeholder_text="selection name")
+
+        self.select_moving_selection_label = pygame_gui.elements.UILabel(pygame.Rect(
+            (20, 150), (-1, 30)), "moving selections", self.manager, self.ui_container_live_config)
+
+        self.dropdown_moving_selection = pygame_gui.elements.UIDropDownMenu(
+            options_list=self.get_moving_selections_for_current_network(),
+            starting_option=self.get_moving_selections_for_current_network()[0],
+            relative_rect=pygame.Rect((220, 150), (200, 30)),
+            manager=self.manager,
+            container=self.ui_container_live_config,
+        )
+
+    def create_algo_param_ui_elements(self, creata_dropdown_pick_algo_config=True):
         self.input_pop_size_label = pygame_gui.elements.UILabel(pygame.Rect(
             (20, 260), (-1, 30)), "population size", self.manager, self.ui_container)
         self.input_pop_size = pygame_gui.elements.UITextEntryLine(pygame.Rect(
             (220, 260), (100, 30)), self.manager, self.ui_container, placeholder_text="pop_size",
             initial_text=str(self.algorithm_param_dic["pop_size"]))
-        self.input_pop_size.set_allowed_characters(text_input_number_type_characters)
+        self.input_pop_size.set_allowed_characters(text_input_float_number_type_characters)
 
         self.input_n_offsprings_label = pygame_gui.elements.UILabel(pygame.Rect(
             (20, 290), (-1, 30)), "number of offsprings", self.manager, self.ui_container)
         self.input_n_offsprings = pygame_gui.elements.UITextEntryLine(pygame.Rect(
             (220, 290), (100, 30)), self.manager, self.ui_container, placeholder_text="n_offsprings",
             initial_text=str(self.algorithm_param_dic["n_offsprings"]))
-        self.input_n_offsprings.set_allowed_characters(text_input_number_type_characters)
+        self.input_n_offsprings.set_allowed_characters(text_input_float_number_type_characters)
+
+        if creata_dropdown_pick_algo_config:
+            self.dropdown_pick_algo_config = pygame_gui.elements.UIDropDownMenu(
+                options_list=self.get_configs_for_current_network(),
+                starting_option=self.get_configs_for_current_network()[0],
+                relative_rect=pygame.Rect((320, 290), (200, 30)),
+                manager=self.manager,
+                container=self.ui_container,
+            )
 
         self.input_n_generations_label = pygame_gui.elements.UILabel(pygame.Rect(
             (20, 320), (-1, 30)), "number of generations", self.manager, self.ui_container)
         self.input_n_generations = pygame_gui.elements.UITextEntryLine(pygame.Rect(
             (220, 320), (100, 30)), self.manager, self.ui_container, placeholder_text="n_generations",
             initial_text=str(self.algorithm_param_dic["n_generations"]))
-        self.input_n_generations.set_allowed_characters(text_input_number_type_characters)
+        self.input_n_generations.set_allowed_characters(text_input_float_number_type_characters)
+
+        self.dropdown_pick_result = pygame_gui.elements.UIDropDownMenu(
+            options_list=self.get_results_for_current_config(),
+            starting_option=self.get_results_for_current_config()[0],
+            relative_rect=pygame.Rect((320, 320), (200, 30)),
+            manager=self.manager,
+            container=self.ui_container,
+        )
 
         self.input_sampling_dropdown_label = pygame_gui.elements.UILabel(pygame.Rect(
             (20, 350), (-1, 30)), "sampling operation", self.manager, self.ui_container)
@@ -823,7 +977,81 @@ class Main():
         self.editor_message_queue.put(
             {"terminate": True, "graph": False, "reset": False, "send_results": False})
 
+    def save_current_moving_selection(self):
+        name = self.input_moving_selection_name.get_text()
+        if name == "":
+            self.popup.kill()
+            self.popup = CustomConfirmationDialog(
+                rect=pygame.Rect(GAME_WIDTH + 20, 20, 100, 100),
+                blocking=True,
+                manager=self.manager,
+                window_title="Missing file name",
+                action_short_name="ok",
+                action_long_desc="enter file name",
+                visible=True,
+            )
+            return
+        if not bool(self.moving_users):
+            self.popup.kill()
+            self.popup = CustomConfirmationDialog(
+                rect=pygame.Rect(GAME_WIDTH + 20, 20, 100, 100),
+                blocking=True,
+                manager=self.manager,
+                window_title="Missing user selection",
+                action_short_name="ok",
+                action_long_desc="press create moving selection first.",
+                visible=True,
+
+            )
+            return
+
+        if os.path.exists(
+                "datastore/" + self.dropdown_menu_pick_network.selected_option + "/moving_selections"):
+            directory_contents = os.listdir(
+                "datastore/" + self.dropdown_menu_pick_network.selected_option + "/moving_selections")
+            for item in directory_contents:
+                if name + ".json" == item:
+                    self.popup.kill()
+                    self.popup = CustomConfirmationDialog(
+                        rect=pygame.Rect(GAME_WIDTH + 20, 20, 100, 100),
+                        blocking=True,
+                        manager=self.manager,
+                        window_title="file already exists ",
+                        action_short_name="ok",
+                        action_long_desc="choose different file name",
+                        visible=True)
+                    return
+
+            self.current_save_result_directory = "datastore/" + self.dropdown_menu_pick_network.selected_option + "/moving_selections/"
+            # save current selection
+            with open(self.current_save_result_directory + name + ".json", "w+", encoding="utf-8") as outfile:
+                json.dump(self.moving_users, outfile)
+
+            # update moving_selections dropdown
+            self.dropdown_moving_selection.kill()
+            self.dropdown_moving_selection = pygame_gui.elements.UIDropDownMenu(
+                options_list=self.get_moving_selections_for_current_network(),
+                starting_option=name + ".json",
+                relative_rect=pygame.Rect((220, 150), (200, 30)),
+                manager=self.manager,
+                container=self.ui_container_live_config,
+            )
+
     def start_evo(self):
+
+        if self.running_mode == RunningMode.LIVE.value and self.dropdown_moving_selection.selected_option == "from file":
+            self.popup.kill()
+            self.popup = CustomConfirmationDialog(
+                rect=pygame.Rect(GAME_WIDTH + 20, 20, 100, 100),
+                blocking=True,
+                manager=self.manager,
+                window_title="missing selection name",
+                action_short_name="ok",
+                action_long_desc="save current selection with name or select one from file",
+                visible=True,
+
+            )
+            return
 
         if os.path.exists("datastore/" + self.dropdown_menu_pick_network.selected_option):
             result_directory_count = 1
@@ -838,7 +1066,11 @@ class Main():
                 "/algorithm_config_" + str(result_directory_count) + self.running_mode
             # save current algorithm config
             with open(self.current_save_result_directory + "/algorithm_config_" + str(result_directory_count) + self.running_mode + ".json", "w+", encoding="utf-8") as outfile:
-                json.dump(self.algorithm_param_dic, outfile)
+                if self.running_mode == RunningMode.LIVE.value:
+                    self.algorithm_param_dic["moving_selection_name"] = self.dropdown_moving_selection.selected_option
+                    json.dump(self.algorithm_param_dic, outfile)
+                else:
+                    json.dump(self.algorithm_param_dic, outfile)
             # TODO uncomment if returning to sequential execution
             # start_optimization(
             #     pop_size=int(self.algorithm_param_dic["pop_size"]),
@@ -880,8 +1112,6 @@ class Main():
             self.disable_ui()
             self.evo_stop_button.enable()
 
-            self.initialize_moving_users()
-
             # TODO uncomment if returning to sequential processing
 
             # # update algo param config dropdown
@@ -911,8 +1141,7 @@ class Main():
                 window_title="Missing network file",
                 action_short_name="ok",
                 action_long_desc="press save first to create required target folder",
-                visible=True,
-
+                visible=True
             )
 
     def on_optimization_finished(self):
@@ -936,7 +1165,7 @@ class Main():
         self.dropdown_pick_algo_config = pygame_gui.elements.UIDropDownMenu(
             options_list=self.get_configs_for_current_network(),
             starting_option=self.get_configs_for_current_network()[-1],
-            relative_rect=pygame.Rect((20, 620), (200, 30)),
+            relative_rect=pygame.Rect((320, 290), (200, 30)),
             manager=self.manager,
             container=self.ui_container,
         )
@@ -945,7 +1174,7 @@ class Main():
         self.dropdown_pick_result = pygame_gui.elements.UIDropDownMenu(
             options_list=self.get_results_for_current_config(),
             starting_option=self.get_results_for_current_config()[0],
-            relative_rect=pygame.Rect((20, 650), (200, 30)),
+            relative_rect=pygame.Rect((320, 320), (200, 30)),
             manager=self.manager,
             container=self.ui_container,
         )
@@ -977,6 +1206,7 @@ class Main():
         # Create the new folder
         if not os.path.exists(new_folder_path):
             os.mkdir(new_folder_path)
+            os.mkdir(new_folder_path + "/moving_selections")
         # save adjacencies
         self.son.save_json_adjacency_graph_to_file(
             new_folder_path + "/" + network_name + "_adjacencies.json")
@@ -996,6 +1226,8 @@ class Main():
             manager=self.manager,
             container=self.ui_container
         )
+        # activate ui_live container
+        self.ui_container_live_config.enable()
 
     def select_solution(
             self, decision_space: np.ndarray, objective_space: np.ndarray, weights: np.ndarray):
@@ -1036,7 +1268,7 @@ class Main():
                 self.dt_since_last_activation_profile_fetch += dt
 
                 # send fetch data fetch request to process queue
-                if self.n_gen_since_last_fetch >= self.pick_rate_in_n_gen or self.dt_since_last_activation_profile_fetch >= self.pick_rate_in_s:
+                if self.n_gen_since_last_fetch >= self.algorithm_param_dic["pick_rate_in_n_gen"] or self.dt_since_last_activation_profile_fetch >= self.algorithm_param_dic["pick_rate_in_s"]:
                     self.editor_message_queue.put(
                         {"terminate": False, "graph": False, "reset": False, "send_results": True})
 
@@ -1124,18 +1356,26 @@ class Main():
                     if event.ui_element == self.save_button:
                         self.save_current_network()
                     if event.ui_element == self.show_edges_checkbox:
-                        self.onclick_checkbox()
+                        self.onclick_show_edges_checkbox()
                     if event.ui_element == self.objectives_checkbox:
                         self.show_objectives_info_box()
                     if event.ui_element == self.evo_start_button:
                         self.start_evo()
                     if event.ui_element == self.evo_stop_button:
                         self.stop_evo()
+                    if event.ui_element == self.create_movement_selection_button:
+                        self.initialize_moving_users()
+                    if event.ui_element == self.save_moving_selection_button:
+                        self.save_current_moving_selection()
+                    if event.ui_element == self.show_moving_selection_button:
+                        self.show_moving_selection_checkbox()
                 if event.type == pygame_gui.UI_DROP_DOWN_MENU_CHANGED:
                     if event.ui_element == self.dropdown_menu:
                         self.on_dropdown_changed(event)
                     if event.ui_element == self.dropdown_menu_pick_network:
                         self.on_dropdown_pick_network_changed(event)
+                    if event.ui_element == self.dropdown_moving_selection:
+                        self.on_dropdown_moving_selection_changed(event)
                     if event.ui_element == self.input_crossover:
                         self.on_dropdown_input_algorithm_config_changed(event, "crossover")
                     if event.ui_element == self.input_mutation:
@@ -1160,7 +1400,7 @@ class Main():
                     self.on_entry_changed(event)
                 self.manager.process_events(event)
 
-            self.draw_whiteboard()
+            self.draw_network()
             self.manager.update(dt)
             self.manager.draw_ui(self.display_surface)
 
