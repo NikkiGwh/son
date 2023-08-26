@@ -781,7 +781,7 @@ class Main():
                         (100, 30)),
             self.manager, self.ui_container_live_config, placeholder_text="velocity",
             initial_text=str(self.algorithm_param_dic["moving_speed"]))
-        self.input_velocity.set_allowed_characters(text_input_integer_number_type_characters)
+        self.input_velocity.set_allowed_characters(text_input_float_number_type_characters)
 
         self.create_movement_selection_button = pygame_gui.elements.UIButton(
             relative_rect=pygame.Rect((20, 90),
@@ -1071,21 +1071,6 @@ class Main():
                     json.dump(self.algorithm_param_dic, outfile)
                 else:
                     json.dump(self.algorithm_param_dic, outfile)
-            # TODO uncomment if returning to sequential execution
-            # start_optimization(
-            #     pop_size=int(self.algorithm_param_dic["pop_size"]),
-            #     n_offsprings=int(self.algorithm_param_dic["n_offsprings"]),
-            #     n_generations=int(self.algorithm_param_dic["n_generations"]),
-            #     sampling=self.algorithm_param_dic["sampling"],
-            #     crossover=self.algorithm_param_dic["crossover"],
-            #     mutation=self.algorithm_param_dic["mutation"],
-            #     eliminate_duplicates=self.algorithm_param_dic["eliminate_duplicates"] == "True",
-            #     objectives=self.algorithm_param_dic["objectives"],
-            #     termination=self.algorithm_param_dic["termination"],
-            #     algorithm=self.algorithm_param_dic["algorithm"],
-            #     folder_path="datastore/" + self.dropdown_menu_pick_network.selected_option +
-            #     "/algorithm_config_" + str(result_directory_count) + "/",
-            #     son_obj=self.son)
 
             optimization_process = multiprocessing.Process(target=start_optimization, args=(
                 int(self.algorithm_param_dic["pop_size"]),
@@ -1247,6 +1232,7 @@ class Main():
         approx_nadir = objective_space.max(axis=0)
 
         # TODO -> handle numpy divide by zero with  np.seterr(divide='ignore', invalid='ignore') maybe
+        np.seterr(divide='ignore', invalid='ignore')
         nF = (objective_space - approx_ideal) / (approx_nadir - approx_ideal)
         decomp = ASF()
         i = decomp.do(nF, 1/weights).argmin()

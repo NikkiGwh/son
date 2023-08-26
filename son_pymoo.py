@@ -1,9 +1,6 @@
 import json
 import multiprocessing
-from pdb import run
-from typing_extensions import runtime
 import numpy as np
-from pandas import MultiIndex
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.algorithms.moo.nsga3 import NSGA3
 from pymoo.algorithms.base.genetic import GeneticAlgorithm
@@ -25,7 +22,6 @@ from pymoo.decomposition.asf import ASF
 from pymoo.core.callback import Callback
 from pymoo.operators.crossover.ux import UniformCrossover
 from pymoo.operators.crossover.pntx import SinglePointCrossover, TwoPointCrossover
-
 from pymoo.termination import get_termination
 import networkx as nx
 
@@ -74,16 +70,25 @@ class SamplingEnum(Enum):
 
 class SonProblemElementWise(ElementwiseProblem):
     def __init__(self, obj_dict: list[str], son: Son):
-        # prepara flags
-        # self.users_changed_index_list: list[int] = []
         # prepare network
         self.son_original = son
+
+        edge_list_with_attributes = self.son_original.graph.edges
+        node_dic_with_attributes = {}
+        for _, node in enumerate(self.son_original.graph.nodes.data()):
+            node_dic_with_attributes[node[0]] = node[1]
+
+        new_graph: nx.Graph = nx.from_edgelist(edge_list_with_attributes)
+        nx.set_node_attributes(new_graph, node_dic_with_attributes)
+        self.son_original.graph = new_graph
+
+        # prepare objectives
         self.obj_dict = obj_dict
         n_var = len(
             list(filter(self.son_original.filter_user_nodes, self.son_original.graph.nodes.data())))
 
         # prepare problem parameter
-        max_activation_values = self.son_original.get_edge_activation_encoding_from_graph()
+        max_activation_values = self.son_original.get_count_of_in_range_bs_per_user()
         xu = np.array([])
         for _, max_value in enumerate(max_activation_values):
             xu = np.append(xu, max_value)
@@ -114,6 +119,49 @@ class SonProblemElementWise(ElementwiseProblem):
         out["F"] = np.array(objectives)
 
 
+def get_upper_lower_boundaries_from_graph(son: Son):
+
+    xu = np.array(son.get_count_of_in_range_bs_per_user())
+    xl = np.full_like(xu, 1)
+
+    return (xl, xu)
+
+
+def repair_population(pop: np.ndarray, xl: np.ndarray, xu: np.ndarray):
+    for individuum_index, individuum in enumerate(pop):
+        for gene_index, gene_value in enumerate(individuum):
+            if gene_value > xu[gene_index] or gene_value < xl[gene_index]:
+                pop[individuum_index][gene_index] = np.random.randint(
+                    xl[gene_index], xu[gene_index]+1)
+
+    return pop
+
+
+class SonRepairSampling(Sampling):
+    def __init__(self, seed_pop, target_pop_size) -> None:
+        self.seed_pop = seed_pop
+        self.target_pop_size = target_pop_size
+        super().__init__()
+
+    def _do(self, problem: SonProblemElementWise, n_samples, **kwargs):
+        for individuum_index, individuum in enumerate(self.seed_pop):
+            for gene_index, gene_value in enumerate(individuum):
+                if gene_value > problem.xu[gene_index] or gene_value < problem.xl[gene_index]:
+                    self.seed_pop[individuum_index][gene_index] = np.random.randint(
+                        problem.xl[gene_index], problem.xu[gene_index]+1)
+
+        count = len(self.seed_pop)
+        while (count < self.target_pop_size):
+            new_ind = []
+            for gene_index, max_gene_value in enumerate(problem.xu):
+                new_ind.append(np.random.randint(problem.xl[gene_index], max_gene_value+1))
+
+            self.seed_pop = np.append(self.seed_pop, [new_ind], axis=0)
+            count += 1
+
+        return self.seed_pop
+
+
 class SonSampling(Sampling):
     def _do(self, problem: SonProblemElementWise, n_samples, **kwargs):
         X = np.empty((n_samples, problem.n_var), int)
@@ -139,15 +187,6 @@ class SeedSampling(Sampling):
                 else:
                     X[i][j] = self.seed_pop[i][j]
         return X
-
-
-class SeedSampling2(Sampling):
-    def __init__(self, seed_pop) -> None:
-        self.seed_pop = seed_pop
-        super().__init__()
-
-    def _do(self, problem: SonProblemElementWise, n_samples, **kwargs):
-        return self.seed_pop
 
 
 class SonCrossover(Crossover):
@@ -289,7 +328,7 @@ def start_optimization(
         pymoo_message_queue: multiprocessing.Queue,
         editor_message_queue: multiprocessing.Queue,
         running_mode: str,
-        prob_mutation: float = 0.3,
+        prob_mutation: float = 0.5,
         prob_crossover: float = 0.9):
 
     pymooAlgorithm = None
@@ -297,13 +336,11 @@ def start_optimization(
     mutationConfig = None
     crossoverConfig = None
 
-    verbose = True
+    verbose = False
     history = True
     if running_mode == RunningMode.LIVE.value:
-        verbose = True
         history = False
     else:
-        verbose = True
         history = True
 
     # sampling
@@ -327,7 +364,7 @@ def start_optimization(
     # mutation
     if (mutation == MutationEnum.PM_MUTATION.value):
         mutationConfig = PolynomialMutation(
-            prob=prob_mutation, eta=3, vtype=float, repair=RoundingRepair())
+            prob=prob_mutation, eta=3, vtype=int)
     elif (mutation == MutationEnum.BIT_FLIP):
         mutationConfig = BitflipMutation(prob=prob_mutation, prob_var=0.3)
     else:
@@ -353,7 +390,6 @@ def start_optimization(
                                mutation=mutationConfig,
                                eliminate_duplicates=eliminate_duplicates,
                                n_generations=n_generations
-
                                )
 
     sonProblem = SonProblemElementWise(obj_dict=objectives, son=son_obj)
@@ -363,12 +399,12 @@ def start_optimization(
     termination_obj = get_termination("n_gen", n_generations)
     # start computatoin with  termination criteria
 
-    result = minimize(
-        sonProblem, pymooAlgorithm, termination=termination_obj, seed=1, verbose=verbose,
-        save_history=history,
-        callback=MyCallback(
-            pymoo_message_queue=pymoo_message_queue, editor_message_queue=editor_message_queue,
-            graph=son_obj.graph, running_mode=running_mode))
+    result = minimize(sonProblem, pymooAlgorithm, termination=termination_obj, seed=1,
+                      verbose=verbose, save_history=history,
+                      callback=MyCallback(
+                          pymoo_message_queue=pymoo_message_queue,
+                          editor_message_queue=editor_message_queue, graph=son_obj.graph,
+                          running_mode=running_mode))
 
     if running_mode == RunningMode.LIVE.value:
         while result.algorithm.callback.data["external_reset"] and result.algorithm.callback.data["external_termination"] == False:
@@ -384,7 +420,10 @@ def start_optimization(
             sonProblem = SonProblemElementWise(
                 obj_dict=objectives, son=son_obj)
 
-            samplingConfig = SeedSampling(seed_pop=result.pop.get("X"))
+            # samplingConfig = SeedSampling(seed_pop=result.pop.get("X"))
+            samplingConfig = SonRepairSampling(
+                seed_pop=result.pop.get("X"),
+                target_pop_size=pop_size)
 
             if (algorithm == AlgorithmEnum.NSGA3.value):
                 # create the reference directions to be used for the optimization in NSGA3
@@ -405,13 +444,14 @@ def start_optimization(
                                        mutation=mutationConfig,
                                        eliminate_duplicates=eliminate_duplicates,
                                        n_generations=n_generations)
-            result = minimize(sonProblem, pymooAlgorithm, termination=termination_obj, seed=1,
-                              verbose=verbose, save_history=history,
-                              callback=MyCallback(
-                                  pymoo_message_queue=pymoo_message_queue,
-                                  editor_message_queue=editor_message_queue,
-                                  graph=son_obj.graph,
-                                  running_mode=running_mode))
+
+            result = minimize(
+                sonProblem, pymooAlgorithm, termination=termination_obj, seed=1,
+                verbose=verbose, save_history=history,
+                callback=MyCallback(
+                    pymoo_message_queue=pymoo_message_queue,
+                    editor_message_queue=editor_message_queue, graph=son_obj.graph,
+                    running_mode=running_mode))
 
         pymoo_message_queue.put(
             {"decision_space": result.X,

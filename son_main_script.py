@@ -894,21 +894,18 @@ class Son:
             json_object = json.load(openfile)
             self.apply_network_node_attributes(json_object)
 
-    def get_edge_activation_encoding_from_graph(self):
-        """get the current activation profile of the network edges as list decoding
+    def get_count_of_in_range_bs_per_user(self):
+        """gets the number of base stations which are in range for every user cell
 
         Returns:
-            list of binary str with each str representing activation profile of base stations for
-            each cell
+            list of number, each entry representing a user node, its value the number of base stations which are in range
         """
-        cell_encoding_list: list[int] = []
+        cell_in_range_bs_list: list[int] = []
         for _, cell_node in enumerate(
                 filter(self.filter_user_nodes, self.graph.nodes.data())):
-            cell_encoding_count = 0
-            for _, edge in enumerate(self.graph[cell_node[0]].items()):
-                cell_encoding_count += 1
-            cell_encoding_list.append(cell_encoding_count)
-        return cell_encoding_list
+            cell_in_range_bs_list.append(len(self.graph[cell_node[0]]))
+        
+        return cell_in_range_bs_list
 
     def get_edge_activation_encoding_from_graph_int_list(self):
         """get the current activation profile of the network edges as list decoding
@@ -939,7 +936,7 @@ class Son:
             encoding (list[int]): activation list of cell edges
         """
         if repair:
-            profile_max_values = self.get_edge_activation_encoding_from_graph()
+            profile_max_values = self.get_count_of_in_range_bs_per_user()
             for index, _ in enumerate(profile_max_values):
                 xu = profile_max_values[index]
                 xl = 1
@@ -971,7 +968,7 @@ class Son:
             boolean (True) if there is no violation
         """
 
-        max_activation_value = self.get_edge_activation_encoding_from_graph()
+        max_activation_value = self.get_count_of_in_range_bs_per_user()
         for index, max_value in enumerate(max_activation_value):
             xu = max_value
             xl = 1
