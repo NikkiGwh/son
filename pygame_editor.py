@@ -16,9 +16,6 @@ import multiprocessing
 import numpy as np
 from math import cos, sin
 from son_pymoo import AlgorithmEnum, CrossoverEnum, MutationEnum, ObjectiveEnum, RunningMode, SamplingEnum, start_optimization
-from pymoo.decomposition.asf import ASF
-import copy
-
 
 dropdown_menue_options_list = ["macro", "micro", "femto", "pico", "cell", "remove"]
 text_input_float_number_type_characters = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "."]
@@ -69,20 +66,13 @@ class Main():
         self.optimization_running = False
         self.dt_since_last_activation_profile_fetch = 0
         self.n_gen_since_last_fetch = 0
-        # self.moving_speed = default_algorithm_param_config["moving_speed"]
-        # self.pick_rate_in_s = default_algorithm_param_config["pick_rate_in_s"]
-        # self.pick_rate_in_n_gen = default_algorithm_param_config["pick_rate_in_n_gen"]
-        # self.reset_rate_in_s = default_algorithm_param_config["reset_delay_in_s"]
-        # self.reset_delay_in_s = default_algorithm_param_config["reset_delay_in_s"]
-        # self.reset_rate_in_ngen = default_algorithm_param_config["reset_rate_in_ngen"]
-        # self.moving_selection_percent = default_algorithm_param_config["moving_selection_percent"]
         self.dt_since_last_evo_reset = 0
         self.objective_history = []
         self.ngen_since_last_evo_reset = 0
         self.selected_node_id = None
         self.moving_users = {}
         self.show_moving_users = False
-        self.queue_flags = {"finished": False, "decision_space": False,
+        self.queue_flags = {"finished": False, "activation_dict": False,
                             "objective_space": False, "n_gen_since_last_fetch": False, "n_gen": False}
         self.current_save_result_directory = ""
         self.pymoo_message_queue = multiprocessing.Queue()
@@ -94,7 +84,7 @@ class Main():
         self.background.fill(pygame.colordict.THECOLORS["white"])
         self.clock = pygame.time.Clock()
         self.son = graph
-        self.activation = []
+        self.activation = {}
         max_x, max_y = self.get_max_x_y(son.graph)
         max_value = max(max_x, max_y)
         self.unit_size_x, self.unit_size_y = (
@@ -487,9 +477,7 @@ class Main():
         if self.dt_since_last_evo_reset >= self.algorithm_param_dic["reset_rate_in_s"] or self.ngen_since_last_evo_reset >= self.algorithm_param_dic["reset_rate_in_ngen"] and self.dt_since_last_evo_reset >= self.algorithm_param_dic["reset_delay_in_s"]:
             # check if current activation profile is valid
             # or someone has moved since last call
-            if (len(
-                    self.activation) > 0 and not self.son.valid_edge_activation_profile_encoding(
-                    self.activation)) or self.topology_changed:
+            if self.topology_changed:
 
                 self.dt_since_last_evo_reset = 0
                 self.ngen_since_last_evo_reset = 0
@@ -969,9 +957,7 @@ class Main():
                 str(self.network_params_dic[self.right_mouse_action]["wave_length"]))
 
     def start_bin_packing(self):
-        self.son.find_activation_profile_bin_packing(
-            CellOrderTwo.LOWEST_DEGREE_FIRST, bs_order=[BaseStationOrder.MACRO_FIRST],
-            bin_packing=BinPackingType.BEST_FIT)
+        self.son.find_activation_profile_greedy_user(update_attributes=True)
 
     def stop_evo(self):
         self.editor_message_queue.put(
@@ -1214,32 +1200,8 @@ class Main():
         # activate ui_live container
         self.ui_container_live_config.enable()
 
-    def select_solution(
-            self, decision_space: np.ndarray, objective_space: np.ndarray, weights: np.ndarray):
-        '''Picks one solution with ASF and given weighting
-
-        Keyword arguments:
-
-        decision_space -- of type numpy array (list[list[int]])
-
-        objective_space -- of type numpy array (list[list[float]])
-
-        weights -- of type numpy array (list[list[float]]), summing up to 1,
-        vector of length equal to len(objective_space)
-        '''
-
-        approx_ideal = objective_space.min(axis=0)
-        approx_nadir = objective_space.max(axis=0)
-
-        # TODO -> handle numpy divide by zero with  np.seterr(divide='ignore', invalid='ignore') maybe
-        np.seterr(divide='ignore', invalid='ignore')
-        nF = (objective_space - approx_ideal) / (approx_nadir - approx_ideal)
-        decomp = ASF()
-        i = decomp.do(nF, 1/weights).argmin()
-        return decision_space[i]
-
     def reset_queue_flags(self):
-        self.queue_flags = {"finished": False, "decision_space": False,
+        self.queue_flags = {"finished": False, "activation_dict": False,
                             "objective_space": False, "n_gen_since_last_fetch": False, "n_gen": False}
 
     def run(self):
@@ -1269,8 +1231,8 @@ class Main():
                     self.queue_flags["finished"] = True
 
                 if self.running_mode == RunningMode.LIVE.value:
-                    if callback_obj["decision_space"] is not False and callback_obj["objective_space"] is not False:
-                        self.queue_flags["decision_space"] = callback_obj["decision_space"]
+                    if callback_obj["activation_dict"] is not False and callback_obj["objective_space"] is not False:
+                        self.queue_flags["activation_dict"] = callback_obj["activation_dict"]
                         self.queue_flags["objective_space"] = callback_obj["objective_space"]
 
                     if callback_obj["n_gen_since_last_fetch"] is not False:
@@ -1280,13 +1242,13 @@ class Main():
                         self.queue_flags["n_gen"] = callback_obj["n_gen"]
 
             # react to queue messages
-            if self.queue_flags["decision_space"] is not False and self.queue_flags["objective_space"] is not False:
-                # -> use ASF selection with weigths to pick one solution
-                picked_solution = self.select_solution(
-                    decision_space=np.array(self.queue_flags["decision_space"]),
-                    objective_space=np.array(self.queue_flags["objective_space"]),
-                    weights=np.array([[0.5, 0.5]]))
-                self.activation = picked_solution.tolist()
+            if self.queue_flags["activation_dict"] is not False and self.queue_flags["objective_space"] is not False:
+
+                self.activation = self.queue_flags["activation_dict"]
+                # print("----son--")
+                # print(self.son.get_activation_dict())
+                # print("---editor activation from pymoo------")
+                # print(self.activation)
                 self.dt_since_last_activation_profile_fetch = 0
 
             if self.queue_flags["n_gen_since_last_fetch"] is not False:
@@ -1300,11 +1262,13 @@ class Main():
                     self.update_objective_history()
                 # move users
                 self.move_some_users()
-                # apply current activation profile
+                # apply current activation
                 if len(self.activation) > 0:
-                    self.son.apply_edge_activation_encoding_to_graph(
-                        self.activation, repair=True, update_network_attributes=True)
-
+                    self.activation = self.son.apply_activation_dict(
+                        self.activation, update_network_attributes=True)
+                else:
+                    # if no activation profile is present -> use greedy approach for all useres
+                    self.son.find_activation_profile_greedy_user(update_attributes=True)
             if self.queue_flags["finished"]:
                 self.on_optimization_finished()
 

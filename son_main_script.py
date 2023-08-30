@@ -675,195 +675,41 @@ class Son:
 
         return round(dl_datarate_sum/count, 4)
 
-    ################################ bin packing methods ################################
+    ################################ greedy assingment methods ################################
 
-    def best_fit(
-            self, cell_node, bs_order: list[BaseStationOrder] | None = None):
-        best_fit_bs_name = None,
-        best_fit_capacity = None
-        best_fit_sinr = None
-        if bs_order is None:
-            open_bin_bs_list = []
-            for _, neighbor in enumerate(self.graph[cell_node[0]].items()):
-                # if bs still has capacity -> add to open_bin_bs_list
-                if self.graph.nodes[neighbor[0]]["load"] < 1:
-                    open_bin_bs_list.append(neighbor[0])
+    def greedy_assign_user_to_bs(
+            self, user_id: str, update_network_attributes=False, set_edge_activation=False):
 
-            # find best fitting bs for current cell traffic and rssi
-            if len(open_bin_bs_list) > 0:
+        best_bs_id = ""
+        best_rssi = -1
+        for _, bs_id in enumerate(self.graph[user_id]):
+            if set_edge_activation:
+                self.graph[user_id][bs_id]["active"] = False
+            if best_rssi < self.get_rssi_cell(user_id, (user_id, bs_id)):
+                best_rssi = self.get_rssi_cell(user_id, (user_id, bs_id))
+                best_bs_id = bs_id
 
-                for bs_name in open_bin_bs_list:
-                    free_antennas_with_new_user = self.graph.nodes[bs_name]["antennas"] - (
-                        self.graph.nodes[bs_name]["traffic"] + 1)
+        if set_edge_activation:
+            self.graph[user_id][best_bs_id]["active"] = True
 
-                    if best_fit_capacity is None or (
-                            free_antennas_with_new_user >= 0 and free_antennas_with_new_user <
-                            best_fit_capacity):
-                        best_fit_bs_name = bs_name
-                        best_fit_capacity = free_antennas_with_new_user
-                        best_fit_sinr = self.graph[cell_node[0]][bs_name]["rssi"]
-                    elif free_antennas_with_new_user >= 0 and free_antennas_with_new_user == best_fit_capacity and self.graph[cell_node[0]][bs_name]["rssi"] > best_fit_sinr:
-                        best_fit_bs_name = bs_name
-                        best_fit_capacity = free_antennas_with_new_user
-                        best_fit_sinr = self.graph[cell_node[0]][bs_name]["rssi"]
-        # if bs_order is given -> iterate through bs types
-        else:
-            for bs_type in bs_order:
-                open_bin_bs_list = []
-                for _, neighbor in enumerate(self.graph[cell_node[0]].items()):
-                    # if bs still has capacity and is of type bs_type -> add to open_bin_bs_list
-                    if self.graph.nodes[neighbor[0]]["load"] < 1 and self.graph.nodes[neighbor[0]][
-                            "type"] == bs_type.value:
-                        open_bin_bs_list.append(neighbor[0])
+        if update_network_attributes:
+            self.update_network_attributes()
+        return best_bs_id
 
-                # find best fitting bs for current cell traffic and rssi
-                if len(open_bin_bs_list) > 0:
+    def find_activation_profile_greedy_user(self, update_attributes=False):
+        """iterrates through all user nodes, applies greedy assignments returns 
+        activation profile dict
+        """
+        activation_dict: dict[str, str] = {}
+        for _, user_node in enumerate(
+                filter(self.filter_user_nodes, self.graph.nodes.data())):
+            best_bs_id = self.greedy_assign_user_to_bs(user_node[0], set_edge_activation=True)
+            activation_dict[user_node[0]] = best_bs_id
+        if (update_attributes):
+            self.update_network_attributes()
+        return activation_dict
 
-                    for bs_name in open_bin_bs_list:
-                        free_antennas_with_new_user = self.network_node_params[self.graph.nodes[bs_name]["type"]]["antennas"] - (
-                            self.graph.nodes[bs_name]["traffic"] + 1)
-
-                        if best_fit_capacity is None or (
-                                free_antennas_with_new_user >= 0 and free_antennas_with_new_user <
-                                best_fit_capacity):
-                            best_fit_bs_name = bs_name
-                            best_fit_capacity = free_antennas_with_new_user
-                            best_fit_sinr = self.graph[cell_node[0]][bs_name]["rssi"]
-                        elif free_antennas_with_new_user >= 0 and free_antennas_with_new_user == best_fit_capacity and self.graph[cell_node[0]][bs_name]["rssi"] > best_fit_sinr:
-                            best_fit_bs_name = bs_name
-                            best_fit_capacity = free_antennas_with_new_user
-                            best_fit_sinr = self.graph[cell_node[0]][bs_name]["rssi"]
-
-                    # leave loop if cell is found for desired bs_type
-                    if best_fit_bs_name is not None:
-                        break
-        # if no bs with open capacity, take the bs with lowest overload
-        if best_fit_capacity is None or best_fit_capacity < 0:
-            current_overload = None
-            for _, neighbor in enumerate(self.graph[cell_node[0]].items()):
-                antennas = self.network_node_params[self.graph.nodes[neighbor[0]]["type"]][
-                    "antennas"]
-                if current_overload is None or antennas - self.graph.nodes[neighbor[0]][
-                        "traffic"] > current_overload:
-                    current_overload = antennas - self.graph.nodes[neighbor[0]]["traffic"]
-                    best_fit_bs_name = neighbor[0]
-                    best_fit_sinr = self.graph[cell_node[0]][neighbor[0]]["rssi"]
-                elif antennas - self.graph.nodes[neighbor[0]][
-                        "traffic"] == current_overload and self.graph[cell_node[0]][neighbor[0]]["rssi"] > best_fit_sinr:
-                    current_overload = antennas - self.graph.nodes[neighbor[0]]["traffic"]
-                    best_fit_bs_name = neighbor[0]
-                    best_fit_sinr = self.graph[cell_node[0]][neighbor[0]]["rssi"]
-
-        # activate best-fit edge and update node attributes
-        self.set_edge_active(
-            cell_node_name=cell_node[0],
-            bs_node_name=best_fit_bs_name, active=True)
-
-    def worst_fit(
-            self, cell_node, bs_order: list[BaseStationOrder] | None = None):
-        worst_fit_bs_name = None,
-        worst_fit_capacity = None
-        worst_fit_sinr = None
-        if bs_order is None:
-            open_bin_bs_list = []
-            for _, neighbor in enumerate(self.graph[cell_node[0]].items()):
-                # if bs still has capacity -> add to open_bin_bs_list
-                if self.graph.nodes[neighbor[0]]["load"] < 1:
-                    open_bin_bs_list.append(neighbor[0])
-
-            # find best fitting bs for current cell traffic and sinr
-            if len(open_bin_bs_list) > 0:
-
-                for bs_name in open_bin_bs_list:
-                    antennas = self.network_node_params[self.graph.nodes[bs_name]["type"]][
-                        "antennas"]
-                    free_antennas_plus_new_user = antennas - (
-                        self.graph.nodes[bs_name]["traffic"] + 1)
-                    if worst_fit_capacity is None or (
-                            free_antennas_plus_new_user >= 0 and free_antennas_plus_new_user >
-                            worst_fit_capacity):
-                        worst_fit_bs_name = bs_name
-                        worst_fit_capacity = free_antennas_plus_new_user
-                        worst_fit_sinr = self.graph[cell_node[0]][bs_name]["rssi"]
-                    elif free_antennas_plus_new_user >= 0 and free_antennas_plus_new_user == worst_fit_capacity and self.graph[cell_node[0]][bs_name]["rssi"] > worst_fit_sinr:
-                        worst_fit_bs_name = bs_name
-                        worst_fit_capacity = free_antennas_plus_new_user
-                        worst_fit_sinr = self.graph[cell_node[0]][bs_name]["rssi"]
-        # if bs_order is given -> iterate through bs types
-        else:
-            for bs_type in bs_order:
-                open_bin_bs_list = []
-                for _, neighbor in enumerate(self.graph[cell_node[0]].items()):
-                    # if bs still has capacity and is of type bs_type -> add to open_bin_bs_list
-                    if self.graph.nodes[neighbor[0]]["load"] < 1 and self.graph.nodes[neighbor[0]][
-                            "type"] == bs_type.value:
-                        open_bin_bs_list.append(neighbor[0])
-
-                # find best fitting bs for current cell traffic and sinr
-                if len(open_bin_bs_list) > 0:
-
-                    for bs_name in open_bin_bs_list:
-                        antennas = self.network_node_params[self.graph.nodes[bs_name]["type"]][
-                            "antennas"]
-                        free_antennas_plus_new_user = antennas - (
-                            self.graph.nodes[bs_name]["traffic"] + 1)
-
-                        if worst_fit_capacity is None or (
-                                free_antennas_plus_new_user >= 0 and free_antennas_plus_new_user >
-                                worst_fit_capacity):
-                            worst_fit_bs_name = bs_name
-                            worst_fit_capacity = free_antennas_plus_new_user
-                            worst_fit_sinr = self.graph[cell_node[0]][bs_name]["rssi"]
-                        elif free_antennas_plus_new_user >= 0 and free_antennas_plus_new_user == worst_fit_capacity and self.graph[cell_node[0]][bs_name]["rssi"] > worst_fit_sinr:
-                            worst_fit_bs_name = bs_name
-                            worst_fit_capacity = free_antennas_plus_new_user
-                            worst_fit_sinr = self.graph[cell_node[0]][bs_name]["rssi"]
-
-                    # leave loop if cell is found for desired bs_type
-                    if worst_fit_bs_name is not None:
-                        break
-        # if no bs with open capacity, take the bs with lowest overload
-        if worst_fit_capacity is None or worst_fit_capacity < 0:
-            current_overload = None
-            for _, neighbor in enumerate(self.graph[cell_node[0]].items()):
-                antennas = self.network_node_params[self.graph.nodes[neighbor[0]]["type"]][
-                    "antennas"]
-                if current_overload is None or antennas - self.graph.nodes[neighbor[0]][
-                        "traffic"] > current_overload:
-                    current_overload = self.graph.nodes[neighbor[0]
-                                                        ]["antennas"] - self.graph.nodes[neighbor[0]]["traffic"]
-                    worst_fit_bs_name = neighbor[0]
-                    worst_fit_sinr = self.graph[cell_node[0]][neighbor[0]]["rssi"]
-                elif antennas - self.graph.nodes[neighbor[0]][
-                        "traffic"] == current_overload and self.graph[cell_node[0]][neighbor[0]]["rssi"] > worst_fit_sinr:
-                    current_overload = antennas - self.graph.nodes[neighbor[0]]["traffic"]
-                    worst_fit_bs_name = neighbor[0]
-                    worst_fit_sinr = self.graph[cell_node[0]][neighbor[0]]["rssi"]
-
-        # activate best-fit edge and update node attributes
-        self.set_edge_active(
-            cell_node_name=cell_node[0],
-            bs_node_name=worst_fit_bs_name, active=True)
-
-    def find_activation_profile_bin_packing(
-            self, cell_order_2: CellOrderTwo = CellOrderTwo.RANDOM, bs_order: list
-            [BaseStationOrder] | None = None, bin_packing: BinPackingType = BinPackingType.BEST_FIT):
-
-        # deactivate all edges and update all node attributes
-        self.set_edges_active(False)
-
-        # prepare cell iteration order
-        cell_node_list = list(filter(self.filter_user_nodes, self.graph.nodes.data()))
-        cell_node_list.sort(key=lambda x: self.sort_cells_after(x, cell_order_two=cell_order_2))
-
-        # perform bin packing for each cell and activate single edges
-        for _, cell_node in enumerate(cell_node_list):
-            if bin_packing == BinPackingType.BEST_FIT:
-                self.best_fit(cell_node, bs_order=bs_order)
-            elif bin_packing == BinPackingType.WORST_FIT:
-                self.worst_fit(cell_node, bs_order=bs_order)
-
-    ############### get encodings, apply encodings, save/load encodings ###################
+    ############### get encodings, apply encodings, save/load encodings and adjacencies ###################
 
     def get_json_adjacency_graph(self):
         return json.dumps(json_graph.adjacency.adjacency_data(self.graph))
@@ -894,72 +740,68 @@ class Son:
             json_object = json.load(openfile)
             self.apply_network_node_attributes(json_object)
 
-    def get_count_of_in_range_bs_per_user(self):
-        """gets the number of base stations which are in range for every user cell
+    def get_possible_activations_dict(self):
+        """returns a dict with user_id's as keys and list of possible bs_id's as values
+        useful for creating the encoding for pymoo optimization
 
         Returns:
-            list of number, each entry representing a user node, its value the number of base stations which are in range
+            dict with user_id's as keys and list of possible bs_id's as values
         """
-        cell_in_range_bs_list: list[int] = []
-        for _, cell_node in enumerate(
+        possible_activations_dict: dict[str, list[str]] = {}
+        for _, user_node in enumerate(
                 filter(self.filter_user_nodes, self.graph.nodes.data())):
-            cell_in_range_bs_list.append(len(self.graph[cell_node[0]]))
-        
-        return cell_in_range_bs_list
+            possible_activations_dict[user_node[0]] = list(self.graph[user_node[0]])
 
-    def get_edge_activation_encoding_from_graph_int_list(self):
-        """get the current activation profile of the network edges as list decoding
+        return possible_activations_dict
+
+    def get_activation_dict(self):
+        """get the current activation profile of the network edges as id list decoding
 
         Returns:
-            list of int with each int representing activation index of base stations for
-            each cell
+            dict of all user nodes as keys and the active bs_node ids as values
         """
-        cell_encoding_list: list[int] = []
-        for _, cell_node in enumerate(
+        activation_dict: dict[str, str] = {}
+        for _, user_node in enumerate(
                 filter(self.filter_user_nodes, self.graph.nodes.data())):
-            for edge_index, edge in enumerate(self.graph[cell_node[0]].items()):
+            for _, edge in enumerate(self.graph[user_node[0]].items()):
                 if edge[1]["active"]:
-                    cell_encoding_list.append(edge_index)
-                    break
-        return cell_encoding_list
+                    activation_dict[user_node[0]] = edge[0]
+        return activation_dict
 
-    def apply_edge_activation_encoding_to_graph(
-            self, encoding: list[int],
-            repair=False,
+    def apply_activation_dict(
+            self, activation_dict: dict[str, str],
             update_network_attributes=True):
-        """takes activation list encoding and applies it on network accordingly
+        """takes activation dict  and applies it on network accordingly
         and also repairs encoding if there are any violations against the current topology
-
-        TODO add repair mecanism for changing number of user nodes
 
         Args:
             encoding (list[int]): activation list of cell edges
+        returns:
+            repaired activation encoding
         """
-        if repair:
-            profile_max_values = self.get_count_of_in_range_bs_per_user()
-            for index, _ in enumerate(profile_max_values):
-                xu = profile_max_values[index]
-                xl = 1
-
-                if encoding[index] > xu or encoding[index] < xl:
-                    encoding[index] = np.random.randint(xl, xu+1)
-
-        for user_node_index, user_node in enumerate(
-                filter(self.filter_user_nodes, self.graph.nodes.data())):
-            for edge_index, edge in enumerate(self.graph[user_node[0]].items()):
-                if encoding[user_node_index]-1 == edge_index:
-                    # self.set_edge_active(user_node[0], edge[0], True)
-                    edge[1]["active"] = True
-                else:
-                    edge[1]["active"] = False
-                    # self.set_edge_active(user_node[0], edge[0], False)
+        for _, user_id in enumerate(activation_dict):
+            if activation_dict[user_id] in self.graph[user_id]:
+                # apply valid activation
+                for _, bs_id in enumerate(self.graph[user_id]):
+                    if bs_id == activation_dict[user_id]:
+                        self.graph[bs_id][user_id]["active"] = True
+                    else:
+                        self.graph[bs_id][user_id]["active"] = False
+            else:
+                # repair invalid acitvation with greedy assignment
+                greedy_bs_id = self.greedy_assign_user_to_bs(user_id, set_edge_activation=True)
+                activation_dict[user_id] = greedy_bs_id
+                # print("#####repair###" + user_id)
 
         if update_network_attributes:
             self.update_network_attributes()
 
+        # return repaired activation encoding
+        return activation_dict
+
     def valid_edge_activation_profile_encoding(
-            self, encoding: list[int]):
-        """takes activation list encoding and checks if it violates the current topology
+            self, activation_dict: dict[str, str]):
+        """takes activation dict and checks if it violates the current topology
 
         Args:
             encoding (list[int]): activation list of cell edges
@@ -968,42 +810,10 @@ class Son:
             boolean (True) if there is no violation
         """
 
-        max_activation_value = self.get_count_of_in_range_bs_per_user()
-        for index, max_value in enumerate(max_activation_value):
-            xu = max_value
-            xl = 1
-            if encoding[index] > xu or encoding[index] < xl:
-                return (False)
+        for _, user_id in enumerate(activation_dict):
+            if activation_dict[user_id] not in self.graph[user_id]:
+                return False
         return True
-
-    def save_edge_activation_profile_to_file(
-            self, encoding: list[int], result_file_name: str,
-            result_sheet_name: str):
-        df = pd.DataFrame(encoding)
-
-        with pd.ExcelWriter(result_file_name, mode="w") as writer:  # pylint: disable=abstract-class-instantiated
-            df.to_excel(writer, result_sheet_name, header=False, index=False)
-
-    def get_edge_activation_encoding_from_file(self, result_file_name: str, result_sheet_name: str):
-        df = pd.read_excel(result_file_name, result_sheet_name,
-                           dtype=object, header=None, index_col=None)
-        encodings: list[list[int]] = df.values.tolist()
-        return encodings
-
-    ################ start calculation methods without visualization and with saving the results ############
-
-    def start_calculation_bin_packing_save(
-            self, result_file_name: str, sheet_name: str,
-            cell_order_2: CellOrderTwo = CellOrderTwo.LOWEST_DEGREE_FIRST, bs_order: None |
-            list[BaseStationOrder] = None, bin_packing: BinPackingType = BinPackingType.BEST_FIT):
-        """
-        calls bin packing for current network and saves encoding to file
-        """
-        result: list[list[str]] = []
-
-        self.find_activation_profile_bin_packing(cell_order_2=cell_order_2, bs_order=bs_order,
-                                                 bin_packing=bin_packing)
-
     ############## visualization methods ####################
 
     def get_node_pos(self):
@@ -1062,7 +872,7 @@ def main():
     #           parameter_config_file_name="datastore/hetNet/hetNet_network_config.json")
 
     # son.draw_current_network()
-    print("nothing")
+    print("son_main_script main()")
     # nx.write_gml(son.graph, "graph.gml")
     # nx.write_graphml_lxml(son.graph, "graph.graphml")
 

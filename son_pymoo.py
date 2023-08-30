@@ -15,13 +15,12 @@ from pymoo.core.duplicate import ElementwiseDuplicateElimination
 from pymoo.operators.crossover.sbx import SBX
 from pymoo.operators.mutation.pm import PolynomialMutation
 from pymoo.operators.repair.rounding import RoundingRepair
-from pymoo.operators.sampling.rnd import IntegerRandomSampling
 from son_main_script import Son
 from enum import Enum
 from pymoo.decomposition.asf import ASF
 from pymoo.core.callback import Callback
 from pymoo.operators.crossover.ux import UniformCrossover
-from pymoo.operators.crossover.pntx import SinglePointCrossover, TwoPointCrossover
+from pymoo.operators.crossover.pntx import SinglePointCrossover
 from pymoo.termination import get_termination
 import networkx as nx
 
@@ -68,11 +67,88 @@ class SamplingEnum(Enum):
     HIGH_RSSI_FIRST_SAMPLING = "HIGH_RSSI_FIRST_SAMPLING"
 
 
+def convert_design_space_pop_to_decision_space_pop(
+        son: Son, design_space_pop: list[dict[str, str]],
+        repair=True):
+    pop = []
+    possible_activation_dict = son.get_possible_activations_dict()
+    for _, individuum_dict in enumerate(design_space_pop):
+        for _, user_id in enumerate(individuum_dict):
+            # repair individuum if neccessary
+            # sometimes here possible_activation_dict is empty and simulation crashes ??
+            # print(possible_activation_dict)
+            # print("------")
+            if repair and individuum_dict[user_id] not in possible_activation_dict[user_id]:
+                individuum_dict[user_id] = son.greedy_assign_user_to_bs(
+                    user_id)
+
+        # create decision space encoding for individuum -> orienting on possible_activation_matrix order
+        ind_decision_space = []
+        for _, user_id in enumerate(possible_activation_dict):
+            ind_decision_space.append(possible_activation_dict[user_id].index(
+                individuum_dict[user_id]))
+        pop.append(ind_decision_space)
+    return pop
+
+
+def convert_decision_space_ind_to_design_space_ind(
+        son: Son, decision_space_ind: list[int], repair):
+
+    individuum = {}
+    possible_activation_dict = son.get_possible_activations_dict()
+    possible_activatino_list = list(possible_activation_dict)
+
+    for index, value in enumerate(decision_space_ind):
+        individuum[possible_activatino_list[index]
+                   ] = possible_activation_dict[possible_activatino_list[index]][value]
+
+    return individuum
+
+
+def convert_decision_Space_pop_to_design_space_pop(
+        son: Son, decision_space_pop: list[list[int]],
+        repair=False):
+    pop = []
+
+    for _, individuum in enumerate(decision_space_pop):
+        pop.append(convert_decision_space_ind_to_design_space_ind(son, individuum, repair=repair))
+
+    return pop
+
+
+def select_solution(son: Son, decision_space, objective_space: np.ndarray,
+                    weights: np.ndarray = np.array([0.5, 0.5])):
+    '''Picks one solution with ASF and given weighting
+
+    Keyword arguments:
+
+    decision_space -- of type list[list[int]]
+
+    objective_space -- of type numpy array (list[list[float]])
+
+    weights -- of type numpy array (list[list[float]]), summing up to 1,
+    vector of length equal to len(objective_space)
+    '''
+
+    # TODO check if picked solution is from pareto front
+    approx_ideal = objective_space.min(axis=0)
+    approx_nadir = objective_space.max(axis=0)
+
+    # TODO -> handle numpy divide by zero with  np.seterr(divide='ignore', invalid='ignore') maybe
+    np.seterr(divide='ignore', invalid='ignore')
+    nF = (objective_space - approx_ideal) / (approx_nadir - approx_ideal)
+    decomp = ASF()
+    i = decomp.do(nF, 1/weights).argmin()
+    design_space_ind = convert_decision_space_ind_to_design_space_ind(
+        son, decision_space[i], repair=False)
+    return design_space_ind
+
+
 class SonProblemElementWise(ElementwiseProblem):
     def __init__(self, obj_dict: list[str], son: Son):
+
         # prepare network
         self.son_original = son
-
         edge_list_with_attributes = self.son_original.graph.edges
         node_dic_with_attributes = {}
         for _, node in enumerate(self.son_original.graph.nodes.data()):
@@ -82,22 +158,26 @@ class SonProblemElementWise(ElementwiseProblem):
         nx.set_node_attributes(new_graph, node_dic_with_attributes)
         self.son_original.graph = new_graph
 
+        self.possible_activation_dict: dict[str, list[str]
+                                            ] = self.son_original.get_possible_activations_dict()
+
         # prepare objectives
         self.obj_dict = obj_dict
         n_var = len(
             list(filter(self.son_original.filter_user_nodes, self.son_original.graph.nodes.data())))
 
         # prepare problem parameter
-        max_activation_values = self.son_original.get_count_of_in_range_bs_per_user()
         xu = np.array([])
-        for _, max_value in enumerate(max_activation_values):
-            xu = np.append(xu, max_value)
+        for _, user_id in enumerate(self.possible_activation_dict):
+            xu = np.append(xu, len(self.possible_activation_dict[user_id])-1)
 
         # call super class constructor
-        super().__init__(n_var=n_var, n_obj=len(obj_dict), xl=np.full_like(xu, 1), xu=xu)
+        super().__init__(n_var=n_var, n_obj=len(obj_dict), xl=np.full_like(xu, 0), xu=xu)
 
     def _evaluate(self, x, out, *args, **kwargs):
-        self.son_original.apply_edge_activation_encoding_to_graph(x)
+        x_design_space = convert_decision_space_ind_to_design_space_ind(
+            self.son_original, x, repair=False)
+        self.son_original.apply_activation_dict(x_design_space)
         # prepare objectives
         objectives = np.array([])
 
@@ -121,7 +201,7 @@ class SonProblemElementWise(ElementwiseProblem):
 
 def get_upper_lower_boundaries_from_graph(son: Son):
 
-    xu = np.array(son.get_count_of_in_range_bs_per_user())
+    xu = np.array(son.get_possible_activations_dict())
     xl = np.full_like(xu, 1)
 
     return (xl, xu)
@@ -138,28 +218,18 @@ def repair_population(pop: np.ndarray, xl: np.ndarray, xu: np.ndarray):
 
 
 class SonRepairSampling(Sampling):
-    def __init__(self, seed_pop, target_pop_size) -> None:
-        self.seed_pop = seed_pop
+
+    def __init__(self, seed_pop_design_space, target_pop_size) -> None:
+        self.seed_pop_design_space = seed_pop_design_space
         self.target_pop_size = target_pop_size
         super().__init__()
 
     def _do(self, problem: SonProblemElementWise, n_samples, **kwargs):
-        for individuum_index, individuum in enumerate(self.seed_pop):
-            for gene_index, gene_value in enumerate(individuum):
-                if gene_value > problem.xu[gene_index] or gene_value < problem.xl[gene_index]:
-                    self.seed_pop[individuum_index][gene_index] = np.random.randint(
-                        problem.xl[gene_index], problem.xu[gene_index]+1)
 
-        count = len(self.seed_pop)
-        while (count < self.target_pop_size):
-            new_ind = []
-            for gene_index, max_gene_value in enumerate(problem.xu):
-                new_ind.append(np.random.randint(problem.xl[gene_index], max_gene_value+1))
-
-            self.seed_pop = np.append(self.seed_pop, [new_ind], axis=0)
-            count += 1
-
-        return self.seed_pop
+        # convert seed_pop to decision space and repair it to match current topology
+        seed_pop_decision_space = convert_design_space_pop_to_decision_space_pop(
+            problem.son_original, self.seed_pop_design_space, repair=True)
+        return seed_pop_decision_space
 
 
 class SonSampling(Sampling):
@@ -169,23 +239,6 @@ class SonSampling(Sampling):
         for i in range(n_samples):
             for j in range(problem.n_var):
                 X[i][j] = np.random.randint(problem.xl[j], problem.xu[j]+1)
-        return X
-
-
-class SeedSampling(Sampling):
-    def __init__(self, seed_pop) -> None:
-        self.seed_pop = seed_pop
-        super().__init__()
-
-    def _do(self, problem: SonProblemElementWise, n_samples, **kwargs):
-        X = np.empty((n_samples, problem.n_var), int)
-        for i in range(n_samples):
-
-            for j in range(problem.n_var):
-                if self.seed_pop[i][j] > problem.xu[j] or self.seed_pop[i][j] < problem.xl[j]:
-                    X[i][j] = np.random.randint(problem.xl[j], problem.xu[j]+1)
-                else:
-                    X[i][j] = self.seed_pop[i][j]
         return X
 
 
@@ -244,12 +297,13 @@ class MyCallback(Callback):
 
     def __init__(
             self, pymoo_message_queue: multiprocessing.Queue,
-            editor_message_queue: multiprocessing.Queue, graph: nx.Graph, running_mode: str) -> None:
+            editor_message_queue: multiprocessing.Queue, son: Son, running_mode: str) -> None:
         super().__init__()
 
         self.data["external_termination"] = False
         self.data["external_reset"] = False
-        self.data["graph"] = graph
+        self.data["graph"] = son.graph
+        self.son = son
         self.pymoo_message_queue = pymoo_message_queue
         self.editor_message_queue = editor_message_queue
         self.running_mode = running_mode
@@ -266,8 +320,12 @@ class MyCallback(Callback):
                 if callback_obj["terminate"] == True:
                     queue_filled = True
                     self.data["external_termination"] = True
+                    # TODO loo if the selection actually picks the solution from pareto front !!!
+                    activation_dict = select_solution(self.son,
+                                                      decision_space=algorithm.pop.get("X"),
+                                                      objective_space=algorithm.pop.get("F"))
                     self.pymoo_message_queue.put(
-                        {"decision_space": algorithm.pop.get("X"),
+                        {"activation_dict": activation_dict,
                          "objective_space": algorithm.pop.get("F"),
                          "finished": False,
                          "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
@@ -278,9 +336,14 @@ class MyCallback(Callback):
                     queue_filled = True
                     self.data["external_reset"] = True
                     self.data["graph"] = callback_obj["graph"]
+                    # TODO loo if the selection actually picks the solution from pareto front !!!
+                    activation_dict = select_solution(
+                        self.son,
+                        decision_space=algorithm.pop.get("X"),
+                        objective_space=algorithm.pop.get("F"))
 
                     self.pymoo_message_queue.put(
-                        {"decision_space": algorithm.pop.get("X"),
+                        {"activation_dict": activation_dict,
                          "objective_space": algorithm.pop.get("F"),
                          "finished": False,
                          "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
@@ -289,8 +352,13 @@ class MyCallback(Callback):
                     algorithm.termination.terminate()
                 elif callback_obj["send_results"] == True:
                     queue_filled = True
+                    # TODO loo if the selection actually picks the solution from pareto front !!!
+                    activation_dict = select_solution(
+                        self.son,
+                        decision_space=algorithm.pop.get("X"),
+                        objective_space=algorithm.pop.get("F"))
                     self.pymoo_message_queue.put(
-                        {"decision_space": algorithm.pop.get("X"),
+                        {"activation_dict": activation_dict,
                          "objective_space": algorithm.pop.get("F"),
                          "finished": False,
                          "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
@@ -301,7 +369,7 @@ class MyCallback(Callback):
             # write to pymoo message queue
             if queue_filled is False:
                 self.pymoo_message_queue.put(
-                    {"decision_space": False,
+                    {"activation_dict": False,
                      "objective_space": False,
                      "finished": False,
                      "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
@@ -336,7 +404,7 @@ def start_optimization(
     mutationConfig = None
     crossoverConfig = None
 
-    verbose = False
+    verbose = True
     history = True
     if running_mode == RunningMode.LIVE.value:
         history = False
@@ -403,26 +471,28 @@ def start_optimization(
                       verbose=verbose, save_history=history,
                       callback=MyCallback(
                           pymoo_message_queue=pymoo_message_queue,
-                          editor_message_queue=editor_message_queue, graph=son_obj.graph,
+                          editor_message_queue=editor_message_queue, son=son_obj,
                           running_mode=running_mode))
 
     if running_mode == RunningMode.LIVE.value:
         while result.algorithm.callback.data["external_reset"] and result.algorithm.callback.data["external_termination"] == False:
 
-            # reinitialize algorithm config
+            # create design_space_pop with old son object -> otherwise conversion is wrong,
+            # no repair necessary ?
+            design_space_pop = convert_decision_Space_pop_to_design_space_pop(
+                son_obj, result.pop.get("X"), repair=False)
 
+            # reinitialize algorithm config
             new_graph: nx.Graph = nx.from_edgelist(
                 result.algorithm.callback.data["graph"]["edge_list_with_attributes"])
             nx.set_node_attributes(
                 new_graph, result.algorithm.callback.data["graph"]["node_dic_with_attributes"])
             son_obj.graph = new_graph
 
-            sonProblem = SonProblemElementWise(
-                obj_dict=objectives, son=son_obj)
+            sonProblem = SonProblemElementWise(obj_dict=objectives, son=son_obj)
 
-            # samplingConfig = SeedSampling(seed_pop=result.pop.get("X"))
             samplingConfig = SonRepairSampling(
-                seed_pop=result.pop.get("X"),
+                seed_pop_design_space=design_space_pop,
                 target_pop_size=pop_size)
 
             if (algorithm == AlgorithmEnum.NSGA3.value):
@@ -450,18 +520,25 @@ def start_optimization(
                 verbose=verbose, save_history=history,
                 callback=MyCallback(
                     pymoo_message_queue=pymoo_message_queue,
-                    editor_message_queue=editor_message_queue, graph=son_obj.graph,
+                    editor_message_queue=editor_message_queue,
+                    son=son_obj,
                     running_mode=running_mode))
 
+        # TODO loo if the selection actually picks the solution from pareto front !!! does it use the right son object ?
+        activation_dict = select_solution(
+            son_obj,
+            decision_space=result.X,
+            objective_space=result.F)
+
         pymoo_message_queue.put(
-            {"decision_space": result.X,
+            {"activation_dict": activation_dict,
              "objective_space": result.F,
              "finished": False,
              "n_gen_since_last_fetch": False,
              "n_gen": False
              })
 
-    decisionSpace = result.X
+    designSpace = convert_decision_Space_pop_to_design_space_pop(son_obj, result.X, repair=False)
     objectiveSpace = result.F
     exec_time = result.exec_time
     print("------- execution time in ms ------")
@@ -492,7 +569,7 @@ def start_optimization(
         objective_result_dic = {
             "optimization_objectives": objectives,
             "results": [],
-            "decisionSpace": decisionSpace.tolist(),
+            "designSpace": designSpace,
             "objectiveSpace": objectiveSpace.tolist(),
             "history": {
                 "n_evals": n_evals_list,
@@ -501,8 +578,8 @@ def start_optimization(
                 "hist_cv_avg": hist_cv_avg
             }}
 
-        for i, individuum in enumerate(decisionSpace):
-            sonProblem.son_original.apply_edge_activation_encoding_to_graph(individuum)
+        for i, individuum in enumerate(designSpace):
+            sonProblem.son_original.apply_activation_dict(individuum)
             objective_result_dic["results"].append(
                 ("ind_result_" +
                  str(i + 1),
@@ -524,7 +601,7 @@ def start_optimization(
         with open(file_path, 'w', encoding="utf-8") as file:
             file.write(json_data)
 
-    pymoo_message_queue.put({"decision_space": False,
+    pymoo_message_queue.put({"activation_dict": False,
                              "objective_space": False,
                              "finished": True,
                              "n_gen_since_last_fetch": False,
