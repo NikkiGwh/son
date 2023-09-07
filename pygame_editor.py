@@ -1,4 +1,5 @@
 
+from copy import deepcopy
 from gc import disable
 from genericpath import isdir
 import math
@@ -38,7 +39,8 @@ default_algorithm_param_config = {
     "reset_rate_in_s": 20,
     "reset_rate_in_ngen": 5,
     "reset_delay_in_s": 10,
-    "moving_selection_percent": 30
+    "moving_selection_percent": 30,
+    "running_time_in_s": 600,
 }
 
 
@@ -60,15 +62,16 @@ class Main():
     def __init__(self, graph: Son) -> None:
         pygame.init()
         self.running_mode = RunningMode.LIVE.value
+        self.use_greedy_assign = False
         self.topology_changed = False
         self.dt_since_last_history_update = 0
-        self.dt_runtime = 0
         self.optimization_running = False
         self.dt_since_last_activation_profile_fetch = 0
         self.n_gen_since_last_fetch = 0
         self.dt_since_last_evo_reset = 0
         self.objective_history = []
         self.ngen_since_last_evo_reset = 0
+        self.running_time_in_s = 0
         self.selected_node_id = None
         self.moving_users = {}
         self.show_moving_users = False
@@ -469,7 +472,7 @@ class Main():
         current_energy_efficiency = self.son.get_energy_efficiency()
         current_avg_dl_datarate = self.son.get_average_dl_datarate()
         self.objective_history.append(
-            (round(self.dt_runtime, 2), current_energy_efficiency, current_avg_dl_datarate))
+            (round(self.running_time_in_s, 2), current_energy_efficiency, current_avg_dl_datarate))
         self.dt_since_last_history_update = 0
 
     def trigger_evo_reset_invalid_activation_profile(self):
@@ -483,7 +486,7 @@ class Main():
                 self.ngen_since_last_evo_reset = 0
                 self.topology_changed = False
 
-                edge_list_with_attributes = self.son.graph.edges
+                edge_list_with_attributes = deepcopy(self.son.graph.edges)
                 node_dic_with_attributes = {}
 
                 for _, node in enumerate(self.son.graph.nodes.data()):
@@ -957,7 +960,9 @@ class Main():
                 str(self.network_params_dic[self.right_mouse_action]["wave_length"]))
 
     def start_bin_packing(self):
-        self.son.find_activation_profile_greedy_user(update_attributes=True)
+        # self.son.find_activation_profile_greedy_user(update_attributes=True)
+        self.use_greedy_assign = True
+        self.start_evo()
 
     def stop_evo(self):
         self.editor_message_queue.put(
@@ -1046,64 +1051,52 @@ class Main():
             for item in directory_contents:
                 if "algorithm_config" in item:
                     result_directory_count += 1
-            os.mkdir("datastore/" + self.dropdown_menu_pick_network.selected_option +
-                     "/algorithm_config_" + str(result_directory_count) + self.running_mode)
+            network_confg_name = "algorithm_config_" + str(
+                result_directory_count) + "_" + self.running_mode
+            if self.use_greedy_assign:
+                network_confg_name += "_greedy"
+
+            os.mkdir(
+                "datastore/" + self.dropdown_menu_pick_network.selected_option + "/" +
+                network_confg_name)
+
             self.current_save_result_directory = "datastore/" + self.dropdown_menu_pick_network.selected_option + \
-                "/algorithm_config_" + str(result_directory_count) + self.running_mode
+                "/" + network_confg_name
             # save current algorithm config
-            with open(self.current_save_result_directory + "/algorithm_config_" + str(result_directory_count) + self.running_mode + ".json", "w+", encoding="utf-8") as outfile:
+            with open(self.current_save_result_directory + "/" + network_confg_name + ".json", "w+", encoding="utf-8") as outfile:
                 if self.running_mode == RunningMode.LIVE.value:
                     self.algorithm_param_dic["moving_selection_name"] = self.dropdown_moving_selection.selected_option
                     json.dump(self.algorithm_param_dic, outfile)
                 else:
                     json.dump(self.algorithm_param_dic, outfile)
 
-            optimization_process = multiprocessing.Process(target=start_optimization, args=(
-                int(self.algorithm_param_dic["pop_size"]),
-                int(self.algorithm_param_dic["n_offsprings"]),
-                int(self.algorithm_param_dic["n_generations"]),
-                "",
-                self.algorithm_param_dic["sampling"],
-                self.algorithm_param_dic["crossover"],
-                self.algorithm_param_dic["mutation"],
-                self.algorithm_param_dic["eliminate_duplicates"] == "True",
-                self.algorithm_param_dic["objectives"],
-                self.algorithm_param_dic["algorithm"],
-                self.son,
-                self.current_save_result_directory + "/",
-                self.pymoo_message_queue,
-                self.editor_message_queue,
-                self.running_mode,
-                0.3,
-                0.3
-            ))
-            optimization_process.start()
+            if not self.use_greedy_assign:
+                optimization_process = multiprocessing.Process(target=start_optimization, args=(
+                    int(self.algorithm_param_dic["pop_size"]),
+                    int(self.algorithm_param_dic["n_offsprings"]),
+                    int(self.algorithm_param_dic["n_generations"]),
+                    "",
+                    self.algorithm_param_dic["sampling"],
+                    self.algorithm_param_dic["crossover"],
+                    self.algorithm_param_dic["mutation"],
+                    self.algorithm_param_dic["eliminate_duplicates"] == "True",
+                    self.algorithm_param_dic["objectives"],
+                    self.algorithm_param_dic["algorithm"],
+                    self.son,
+                    self.current_save_result_directory + "/",
+                    self.pymoo_message_queue,
+                    self.editor_message_queue,
+                    self.running_mode,
+                    0.3,
+                    0.3
+                ))
+                optimization_process.start()
 
             self.optimization_running = True
             self.disable_ui()
             self.evo_stop_button.enable()
-
-            # TODO uncomment if returning to sequential processing
-
-            # # update algo param config dropdown
-            # self.dropdown_pick_algo_config.kill()
-            # self.dropdown_pick_algo_config = pygame_gui.elements.UIDropDownMenu(
-            #     options_list=self.get_configs_for_current_network(),
-            #     starting_option=self.get_configs_for_current_network()[-1],
-            #     relative_rect=pygame.Rect((20, 590), (200, 30)),
-            #     manager=self.manager,
-            #     container=self.ui_container,
-            # )
-            # # update reults dropdown dropdown
-            # self.dropdown_pick_result.kill()
-            # self.dropdown_pick_result = pygame_gui.elements.UIDropDownMenu(
-            #     options_list=self.get_results_for_current_config(),
-            #     starting_option=self.get_results_for_current_config()[0],
-            #     relative_rect=pygame.Rect((20, 620), (200, 30)),
-            #     manager=self.manager,
-            #     container=self.ui_container,
-            # )
         else:
+            self.use_greedy_assign = False
             self.popup.kill()
             self.popup = CustomConfirmationDialog(
                 rect=pygame.Rect(GAME_WIDTH + 20, 20, 100, 100),
@@ -1118,18 +1111,14 @@ class Main():
     def on_optimization_finished(self):
         # update algo param config dropdown
         self.optimization_running = False
-
+        self.use_greedy_assign = False
         if self.running_mode == RunningMode.LIVE.value:
-            self.dt_runtime = 0
-            self.dt_since_last_history_update = 0
 
             json_data = json.dumps(self.objective_history)
             # Save JSON data to a file
             file_path = self.current_save_result_directory + "/objectives_result.json"
             with open(file_path, 'w', encoding="utf-8") as file:
                 file.write(json_data)
-
-            self.objective_history = []
 
         self.evo_stop_button.disable()
         self.dropdown_pick_algo_config.kill()
@@ -1149,6 +1138,7 @@ class Main():
             manager=self.manager,
             container=self.ui_container,
         )
+        self.reset_all_after_run()
         self.enable_ui()
 
     def save_current_network(self):
@@ -1204,76 +1194,103 @@ class Main():
         self.queue_flags = {"finished": False, "activation_dict": False,
                             "objective_space": False, "n_gen_since_last_fetch": False, "n_gen": False}
 
+    def reset_all_after_run(self):
+        self.reset_queue_flags()
+        self.activation = {}
+        self.moving_users = []
+        self.use_greedy_assign = False
+        self.topology_changed = False
+        self.dt_since_last_history_update = 0
+        self.optimization_running = False
+        self.dt_since_last_activation_profile_fetch = 0
+        self.n_gen_since_last_fetch = 0
+        self.dt_since_last_evo_reset = 0
+        self.objective_history = []
+        self.ngen_since_last_evo_reset = 0
+        self.running_time_in_s = 0
+        self.selected_node_id = None
+        self.moving_users = {}
+        self.show_moving_users = False
+
     def run(self):
         while True:
             # set time per tick
             dt = self.clock.tick(30)/1000
 
             if self.running_mode == RunningMode.LIVE.value and self.optimization_running:
-                self.dt_runtime += dt
                 self.dt_since_last_history_update += dt
                 self.dt_since_last_evo_reset += dt
                 self.dt_since_last_activation_profile_fetch += dt
+                self.running_time_in_s += dt
 
-                # send fetch data fetch request to process queue
-                if self.n_gen_since_last_fetch >= self.algorithm_param_dic["pick_rate_in_n_gen"] or self.dt_since_last_activation_profile_fetch >= self.algorithm_param_dic["pick_rate_in_s"]:
-                    self.editor_message_queue.put(
-                        {"terminate": False, "graph": False, "reset": False, "send_results": True})
+                if not self.use_greedy_assign:
+                    # send fetch data fetch request to process queue
+                    if self.n_gen_since_last_fetch >= self.algorithm_param_dic["pick_rate_in_n_gen"] or self.dt_since_last_activation_profile_fetch >= self.algorithm_param_dic["pick_rate_in_s"]:
+                        self.editor_message_queue.put(
+                            {"terminate": False, "graph": False, "reset": False, "send_results": True})
 
-                # trigger evo_reset if current activation profile violates son topology
-                self.trigger_evo_reset_invalid_activation_profile()
+                    # trigger evo_reset if current activation profile violates son topology
+                    self.trigger_evo_reset_invalid_activation_profile()
 
-            # read message queue
-            while self.pymoo_message_queue.empty() is False:
-                callback_obj = self.pymoo_message_queue.get()
-                if callback_obj["finished"] == True:
-                    # update dropdowns after normal completion and static mode
-                    self.queue_flags["finished"] = True
+                    # read message queue
+                    while self.pymoo_message_queue.empty() is False:
+                        callback_obj = self.pymoo_message_queue.get()
+                        if callback_obj["finished"] == True:
+                            # update dropdowns after normal completion and static mode
+                            self.queue_flags["finished"] = True
 
-                if self.running_mode == RunningMode.LIVE.value:
-                    if callback_obj["activation_dict"] is not False and callback_obj["objective_space"] is not False:
-                        self.queue_flags["activation_dict"] = callback_obj["activation_dict"]
-                        self.queue_flags["objective_space"] = callback_obj["objective_space"]
+                        if self.running_mode == RunningMode.LIVE.value:
+                            if callback_obj["activation_dict"] is not False and callback_obj["objective_space"] is not False:
+                                self.queue_flags["activation_dict"] = callback_obj["activation_dict"]
+                                self.queue_flags["objective_space"] = callback_obj["objective_space"]
 
-                    if callback_obj["n_gen_since_last_fetch"] is not False:
-                        self.queue_flags["n_gen_since_last_fetch"] = callback_obj["n_gen_since_last_fetch"]
+                            if callback_obj["n_gen_since_last_fetch"] is not False:
+                                self.queue_flags["n_gen_since_last_fetch"] = callback_obj["n_gen_since_last_fetch"]
 
-                    if callback_obj["n_gen"] is not False:
-                        self.queue_flags["n_gen"] = callback_obj["n_gen"]
+                            if callback_obj["n_gen"] is not False:
+                                self.queue_flags["n_gen"] = callback_obj["n_gen"]
 
-            # react to queue messages
-            if self.queue_flags["activation_dict"] is not False and self.queue_flags["objective_space"] is not False:
+                        # react to queue messages
+                        if self.queue_flags["activation_dict"] is not False and self.queue_flags["objective_space"] is not False:
 
-                self.activation = self.queue_flags["activation_dict"]
-                # print("----son--")
-                # print(self.son.get_activation_dict())
-                # print("---editor activation from pymoo------")
-                # print(self.activation)
-                self.dt_since_last_activation_profile_fetch = 0
+                            self.activation = self.queue_flags["activation_dict"]
+                            self.dt_since_last_activation_profile_fetch = 0
 
-            if self.queue_flags["n_gen_since_last_fetch"] is not False:
-                self.n_gen_since_last_fetch = self.queue_flags["n_gen_since_last_fetch"]
+                        if self.queue_flags["n_gen_since_last_fetch"] is not False:
+                            self.n_gen_since_last_fetch = self.queue_flags["n_gen_since_last_fetch"]
 
-            if self.queue_flags["n_gen"] is not False:
-                self.ngen_since_last_evo_reset = self.queue_flags["n_gen"]
+                        if self.queue_flags["n_gen"] is not False:
+                            self.ngen_since_last_evo_reset = self.queue_flags["n_gen"]
 
-            if self.running_mode == RunningMode.LIVE.value and self.optimization_running:
-                if self.dt_since_last_history_update >= 1:
-                    self.update_objective_history()
-                # move users
-                self.move_some_users()
-                # apply current activation
-                if len(self.activation) > 0:
-                    self.activation = self.son.apply_activation_dict(
-                        self.activation, update_network_attributes=True)
-                else:
-                    # if no activation profile is present -> use greedy approach for all useres
+                    if self.dt_since_last_history_update >= 1:
+                        self.update_objective_history()
+                    # move users
+                    self.move_some_users()
+                    # apply current activation
+                    if len(self.activation) > 0:
+                        self.activation = self.son.apply_activation_dict(
+                            self.activation, update_network_attributes=True)
+                    else:
+                        # if no activation profile is present -> use greedy approach for all useres
+                        self.son.find_activation_profile_greedy_user(update_attributes=True)
+                    if self.queue_flags["finished"]:
+                        self.on_optimization_finished()
+
+                    # reset queue flags
+                    self.reset_queue_flags()
+
+                if self.use_greedy_assign:
+                    if self.dt_since_last_history_update >= 1:
+                        self.update_objective_history()
+                    # move users
+                    self.move_some_users()
                     self.son.find_activation_profile_greedy_user(update_attributes=True)
-            if self.queue_flags["finished"]:
-                self.on_optimization_finished()
+                    if self.queue_flags["finished"]:
+                        self.on_optimization_finished()
 
-            # reset queue flags
-            self.reset_queue_flags()
+                # stop if running time is exceeded
+                if self.running_time_in_s >= self.algorithm_param_dic["running_time_in_s"]:
+                    self.stop_evo()
 
             # handle events
             for event in pygame.event.get():

@@ -75,9 +75,6 @@ def convert_design_space_pop_to_decision_space_pop(
     for _, individuum_dict in enumerate(design_space_pop):
         for _, user_id in enumerate(individuum_dict):
             # repair individuum if neccessary
-            # sometimes here possible_activation_dict is empty and simulation crashes ??
-            # print(possible_activation_dict)
-            # print("------")
             if repair and individuum_dict[user_id] not in possible_activation_dict[user_id]:
                 individuum_dict[user_id] = son.greedy_assign_user_to_bs(
                     user_id)
@@ -315,9 +312,9 @@ class MyCallback(Callback):
             self.n_gen_since_last_fetch += 1
             # read editor message queue
             while self.editor_message_queue.empty() is False:
-                callback_obj = self.editor_message_queue.get()
+                queue_obj = self.editor_message_queue.get()
 
-                if callback_obj["terminate"] == True:
+                if queue_obj["terminate"] == True:
                     queue_filled = True
                     self.data["external_termination"] = True
                     # TODO loo if the selection actually picks the solution from pareto front !!!
@@ -332,10 +329,10 @@ class MyCallback(Callback):
                          "n_gen": 0
                          })
                     algorithm.termination.terminate()
-                elif callback_obj["reset"] == True and callback_obj["graph"] is not False:
+                elif queue_obj["reset"] == True and queue_obj["graph"] is not False:
                     queue_filled = True
                     self.data["external_reset"] = True
-                    self.data["graph"] = callback_obj["graph"]
+                    self.data["graph"] = queue_obj["graph"]
                     # TODO loo if the selection actually picks the solution from pareto front !!!
                     activation_dict = select_solution(
                         self.son,
@@ -350,7 +347,7 @@ class MyCallback(Callback):
                          "n_gen": 0
                          })
                     algorithm.termination.terminate()
-                elif callback_obj["send_results"] == True:
+                elif queue_obj["send_results"] == True:
                     queue_filled = True
                     # TODO loo if the selection actually picks the solution from pareto front !!!
                     activation_dict = select_solution(
