@@ -33,8 +33,6 @@ default_algorithm_param_config = {
     "eliminate_duplicates": "True",
     "objectives": [ObjectiveEnum.AVG_DL_RATE.value, ObjectiveEnum.ENERGY_EFFICIENCY.value],
     "algorithm": AlgorithmEnum.NSGA2.value,
-    "pick_rate_in_n_gen": 5,
-    "pick_rate_in_s": 20,
     "moving_speed": 0.1,
     "reset_rate_in_s": 20,
     "reset_rate_in_ngen": 5,
@@ -62,6 +60,7 @@ class Main():
     def __init__(self, graph: Son) -> None:
         pygame.init()
         self.running_mode = RunningMode.LIVE.value
+        self.finished = False
         self.use_greedy_assign = False
         self.topology_changed = False
         self.dt_since_last_history_update = 0
@@ -75,8 +74,8 @@ class Main():
         self.selected_node_id = None
         self.moving_users = {}
         self.show_moving_users = False
-        self.queue_flags = {"finished": False, "activation_dict": False,
-                            "objective_space": False, "n_gen_since_last_fetch": False, "n_gen": False}
+        self.queue_flags = {"activation_dict": False, "objective_space": False,
+                            "n_gen_since_last_fetch": False, "n_gen": False}
         self.current_save_result_directory = ""
         self.pymoo_message_queue = multiprocessing.Queue()
         self.editor_message_queue = multiprocessing.Queue()
@@ -498,7 +497,7 @@ class Main():
                      {"edge_list_with_attributes": edge_list_with_attributes,
                       "node_dic_with_attributes": node_dic_with_attributes
                       },
-                     "reset": True, "send_results": False})
+                     "reset": True, "send_results": True})
 
     def on_left_click(self, target_pos: tuple[int, int]):
         node_id = self.selected_node_id
@@ -627,8 +626,8 @@ class Main():
             self.algorithm_param_dic["pop_size"] = float(event.text)
         if event.ui_element == self.input_resetting_rate:
             self.algorithm_param_dic["reset_rate_in_ngen"] = float(event.text)
-        if event.ui_element == self.input_picking_rate:
-            self.algorithm_param_dic["pick_rate_in_n_gen"] = float(event.text)
+        if event.ui_element == self.input_running_time:
+            self.algorithm_param_dic["running_time_in_s"] = float(event.text)
         if event.ui_element == self.input_velocity:
             self.algorithm_param_dic["moving_speed"] = float(event.text)
         if event.ui_element == self.input_create_movement_selection_percentage:
@@ -756,14 +755,14 @@ class Main():
             initial_text=str(self.algorithm_param_dic["reset_rate_in_ngen"]))
         self.input_resetting_rate.set_allowed_characters(text_input_integer_number_type_characters)
 
-        self.input_picking_rate_label = pygame_gui.elements.UILabel(pygame.Rect(
-            (20, 30), (-1, 30)), "picking rate in nGen", self.manager, self.ui_container_live_config)
-        self.input_picking_rate = pygame_gui.elements.UITextEntryLine(
+        self.input_running_time_label = pygame_gui.elements.UILabel(pygame.Rect(
+            (20, 30), (-1, 30)), "running time in s", self.manager, self.ui_container_live_config)
+        self.input_running_time = pygame_gui.elements.UITextEntryLine(
             pygame.Rect((220, 30),
                         (100, 30)),
-            self.manager, self.ui_container_live_config, placeholder_text="picking rate",
-            initial_text=str(self.algorithm_param_dic["pick_rate_in_n_gen"]))
-        self.input_picking_rate.set_allowed_characters(text_input_integer_number_type_characters)
+            self.manager, self.ui_container_live_config, placeholder_text="running time",
+            initial_text=str(self.algorithm_param_dic["running_time_in_s"]))
+        self.input_running_time.set_allowed_characters(text_input_integer_number_type_characters)
 
         self.input_velocity_label = pygame_gui.elements.UILabel(pygame.Rect(
             (20, 60), (-1, 30)), "velocity", self.manager, self.ui_container_live_config)
@@ -966,7 +965,9 @@ class Main():
 
     def stop_evo(self):
         self.editor_message_queue.put(
-            {"terminate": True, "graph": False, "reset": False, "send_results": False})
+            {"terminate": True, "graph": False, "reset": False, "send_results": True})
+        if self.use_greedy_assign:
+            self.finished = True
 
     def save_current_moving_selection(self):
         name = self.input_moving_selection_name.get_text()
@@ -1140,6 +1141,7 @@ class Main():
         )
         self.reset_all_after_run()
         self.enable_ui()
+        print("finished")
 
     def save_current_network(self):
 
@@ -1191,8 +1193,8 @@ class Main():
         self.ui_container_live_config.enable()
 
     def reset_queue_flags(self):
-        self.queue_flags = {"finished": False, "activation_dict": False,
-                            "objective_space": False, "n_gen_since_last_fetch": False, "n_gen": False}
+        self.queue_flags = {"activation_dict": False, "objective_space": False,
+                            "n_gen_since_last_fetch": False, "n_gen": False}
 
     def reset_all_after_run(self):
         self.reset_queue_flags()
@@ -1202,8 +1204,6 @@ class Main():
         self.topology_changed = False
         self.dt_since_last_history_update = 0
         self.optimization_running = False
-        self.dt_since_last_activation_profile_fetch = 0
-        self.n_gen_since_last_fetch = 0
         self.dt_since_last_evo_reset = 0
         self.objective_history = []
         self.ngen_since_last_evo_reset = 0
@@ -1211,6 +1211,7 @@ class Main():
         self.selected_node_id = None
         self.moving_users = {}
         self.show_moving_users = False
+        self.finished = False
 
     def run(self):
         while True:
@@ -1225,9 +1226,8 @@ class Main():
 
                 if not self.use_greedy_assign:
                     # send fetch data fetch request to process queue
-                    if self.n_gen_since_last_fetch >= self.algorithm_param_dic["pick_rate_in_n_gen"] or self.dt_since_last_activation_profile_fetch >= self.algorithm_param_dic["pick_rate_in_s"]:
-                        self.editor_message_queue.put(
-                            {"terminate": False, "graph": False, "reset": False, "send_results": True})
+                    self.editor_message_queue.put(
+                        {"terminate": False, "graph": False, "reset": False, "send_results": True})
 
                     # trigger evo_reset if current activation profile violates son topology
                     self.trigger_evo_reset_invalid_activation_profile()
@@ -1237,7 +1237,7 @@ class Main():
                         callback_obj = self.pymoo_message_queue.get()
                         if callback_obj["finished"] == True:
                             # update dropdowns after normal completion and static mode
-                            self.queue_flags["finished"] = True
+                            self.finished = True
 
                         if self.running_mode == RunningMode.LIVE.value:
                             if callback_obj["activation_dict"] is not False and callback_obj["objective_space"] is not False:
@@ -1250,34 +1250,31 @@ class Main():
                             if callback_obj["n_gen"] is not False:
                                 self.queue_flags["n_gen"] = callback_obj["n_gen"]
 
-                        # react to queue messages
-                        if self.queue_flags["activation_dict"] is not False and self.queue_flags["objective_space"] is not False:
+                    # react to queue messages
+                    if self.queue_flags["activation_dict"] is not False and self.queue_flags["objective_space"] is not False:
 
-                            self.activation = self.queue_flags["activation_dict"]
-                            self.dt_since_last_activation_profile_fetch = 0
+                        self.activation = self.queue_flags["activation_dict"]
+                        self.dt_since_last_activation_profile_fetch = 0
 
-                        if self.queue_flags["n_gen_since_last_fetch"] is not False:
-                            self.n_gen_since_last_fetch = self.queue_flags["n_gen_since_last_fetch"]
+                    if self.queue_flags["n_gen_since_last_fetch"] is not False:
+                        self.n_gen_since_last_fetch = self.queue_flags["n_gen_since_last_fetch"]
 
-                        if self.queue_flags["n_gen"] is not False:
-                            self.ngen_since_last_evo_reset = self.queue_flags["n_gen"]
+                    if self.queue_flags["n_gen"] is not False:
+                        self.ngen_since_last_evo_reset = self.queue_flags["n_gen"]
 
                     if self.dt_since_last_history_update >= 1:
                         self.update_objective_history()
                     # move users
                     self.move_some_users()
-                    # apply current activation
+                    # apply current activation and repair it
                     if len(self.activation) > 0:
                         self.activation = self.son.apply_activation_dict(
                             self.activation, update_network_attributes=True)
                     else:
                         # if no activation profile is present -> use greedy approach for all useres
                         self.son.find_activation_profile_greedy_user(update_attributes=True)
-                    if self.queue_flags["finished"]:
+                    if self.finished:
                         self.on_optimization_finished()
-
-                    # reset queue flags
-                    self.reset_queue_flags()
 
                 if self.use_greedy_assign:
                     if self.dt_since_last_history_update >= 1:
@@ -1285,12 +1282,15 @@ class Main():
                     # move users
                     self.move_some_users()
                     self.son.find_activation_profile_greedy_user(update_attributes=True)
-                    if self.queue_flags["finished"]:
+                    if self.finished:
                         self.on_optimization_finished()
 
                 # stop if running time is exceeded
                 if self.running_time_in_s >= self.algorithm_param_dic["running_time_in_s"]:
                     self.stop_evo()
+
+                # reset queue_flags
+                self.reset_queue_flags()
 
             # handle events
             for event in pygame.event.get():
