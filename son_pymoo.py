@@ -292,24 +292,27 @@ class SonDublicateElimination(ElementwiseDuplicateElimination):
 
 class MyCallback(Callback):
 
-    def __init__(
-            self, pymoo_message_queue: multiprocessing.Queue,
-            editor_message_queue: multiprocessing.Queue, son: Son, running_mode: str) -> None:
+    def __init__(self, pymoo_message_queue: multiprocessing.Queue,
+                 editor_message_queue: multiprocessing.Queue, son: Son, running_mode: str,
+                 total_gen=0) -> None:
         super().__init__()
 
         self.data["external_termination"] = False
         self.data["external_reset"] = False
         self.data["graph"] = son.graph
         self.son = son
+        self.total_gen = total_gen
         self.pymoo_message_queue = pymoo_message_queue
         self.editor_message_queue = editor_message_queue
         self.running_mode = running_mode
         self.n_gen_since_last_fetch = 0
+        self.n_gen_since_last_reset = 0
 
     def notify(self, algorithm: GeneticAlgorithm):
         queue_filled = False
         if self.running_mode == RunningMode.LIVE.value:
             self.n_gen_since_last_fetch += 1
+            self.n_gen_since_last_reset += 1
             # read editor message queue
             while self.editor_message_queue.empty() is False:
                 queue_obj = self.editor_message_queue.get()
@@ -322,12 +325,14 @@ class MyCallback(Callback):
                                                       decision_space=algorithm.pop.get("X"),
                                                       objective_space=algorithm.pop.get("F"))
                     self.pymoo_message_queue.put(
-                        {"activation_dict": activation_dict,
-                         "objective_space": algorithm.pop.get("F"),
-                         "finished": False,
-                         "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
-                         "n_gen": 0
-                         })
+                        {
+                            "activation_dict": activation_dict,
+                            "objective_space": algorithm.pop.get("F"),
+                            "finished": False,
+                            "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
+                            "n_gen_since_last_reset": self.n_gen_since_last_reset,
+                            "n_gen": algorithm.n_gen + self.total_gen
+                        })
                     algorithm.termination.terminate()
                 elif queue_obj["reset"] == True and queue_obj["graph"] is not False:
                     queue_filled = True
@@ -344,7 +349,8 @@ class MyCallback(Callback):
                          "objective_space": algorithm.pop.get("F"),
                          "finished": False,
                          "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
-                         "n_gen": 0
+                         "n_gen_since_last_reset": 0,
+                         "n_gen": algorithm.n_gen + self.total_gen
                          })
                     algorithm.termination.terminate()
                 elif queue_obj["send_results"] == True:
@@ -359,7 +365,8 @@ class MyCallback(Callback):
                          "objective_space": algorithm.pop.get("F"),
                          "finished": False,
                          "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
-                         "n_gen": algorithm.n_gen
+                         "n_gen_since_last_reset": self.n_gen_since_last_reset,
+                         "n_gen": algorithm.n_gen + self.total_gen
                          })
                     self.n_gen_since_last_fetch = 0
 
@@ -370,7 +377,8 @@ class MyCallback(Callback):
                      "objective_space": False,
                      "finished": False,
                      "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
-                     "n_gen": algorithm.n_gen
+                     "n_gen_since_last_reset": self.n_gen_since_last_reset,
+                     "n_gen": algorithm.n_gen + self.total_gen
                      })
 
 ################################ main ###################
@@ -394,12 +402,14 @@ def start_optimization(
         editor_message_queue: multiprocessing.Queue,
         running_mode: str,
         prob_mutation: float = 0.5,
-        prob_crossover: float = 0.9):
+        prob_crossover: float = 0.9,
+        seed=None):
 
     pymooAlgorithm = None
     samplingConfig = None
     mutationConfig = None
     crossoverConfig = None
+    seed = 1
 
     verbose = True
     history = True
@@ -464,7 +474,7 @@ def start_optimization(
     termination_obj = get_termination("n_gen", n_generations)
     # start computatoin with  termination criteria
 
-    result = minimize(sonProblem, pymooAlgorithm, termination=termination_obj, seed=1,
+    result = minimize(sonProblem, pymooAlgorithm, termination=termination_obj, seed=seed,
                       verbose=verbose, save_history=history,
                       callback=MyCallback(
                           pymoo_message_queue=pymoo_message_queue,
@@ -472,6 +482,7 @@ def start_optimization(
                           running_mode=running_mode))
 
     if running_mode == RunningMode.LIVE.value:
+        total_gen = result.algorithm.n_gen
         while result.algorithm.callback.data["external_reset"] and result.algorithm.callback.data["external_termination"] == False:
 
             # create design_space_pop with old son object -> otherwise conversion is wrong,
@@ -512,16 +523,17 @@ def start_optimization(
                                        eliminate_duplicates=eliminate_duplicates,
                                        n_generations=n_generations)
 
+            total_gen += result.algorithm.n_gen
             result = minimize(
-                sonProblem, pymooAlgorithm, termination=termination_obj, seed=1,
+                sonProblem, pymooAlgorithm, termination=termination_obj, seed=seed,
                 verbose=verbose, save_history=history,
                 callback=MyCallback(
                     pymoo_message_queue=pymoo_message_queue,
                     editor_message_queue=editor_message_queue,
                     son=son_obj,
-                    running_mode=running_mode))
+                    running_mode=running_mode, total_gen=total_gen))
 
-        # TODO loo if the selection actually picks the solution from pareto front !!! does it use the right son object ?
+        # TODO look if the selection actually picks the solution from pareto front !!! does it use the right son object ?
         activation_dict = select_solution(
             son_obj,
             decision_space=result.X,
@@ -532,6 +544,7 @@ def start_optimization(
              "objective_space": result.F,
              "finished": False,
              "n_gen_since_last_fetch": False,
+             "n_gen_since_last_reset": False,
              "n_gen": False
              })
 
@@ -602,6 +615,7 @@ def start_optimization(
                              "objective_space": False,
                              "finished": True,
                              "n_gen_since_last_fetch": False,
+                             "n_gen_since_last_reset": False,
                              "n_gen": False
                              })
 

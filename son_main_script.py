@@ -770,7 +770,7 @@ class Son:
 
     def apply_activation_dict(
             self, activation_dict: dict[str, str],
-            update_network_attributes=True):
+            update_network_attributes=True, min_rssi=-1.0):
         """takes activation dict  and applies it on network accordingly
         and also repairs encoding if there are any violations against the current topology
 
@@ -791,10 +791,22 @@ class Son:
                 # repair invalid acitvation with greedy assignment
                 greedy_bs_id = self.greedy_assign_user_to_bs(user_id, set_edge_activation=True)
                 activation_dict[user_id] = greedy_bs_id
-                # print("#####repair###" + user_id)
 
         if update_network_attributes:
             self.update_network_attributes()
+
+            if min_rssi != -1:
+                changed = False
+                for _, cell_node in enumerate(
+                        list(filter(lambda x: x[1]["type"] == "cell", self.graph.nodes.data()))):
+                    if cell_node[1]["rssi"] < min_rssi:
+                        # find better rssi
+                        greedy_bs_id = self.greedy_assign_user_to_bs(
+                            cell_node[0], set_edge_activation=True)
+                        activation_dict[cell_node[0]] = greedy_bs_id
+                        changed = True
+                if changed:
+                    self.update_network_attributes()
 
         # return repaired activation encoding
         return activation_dict

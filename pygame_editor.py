@@ -34,11 +34,10 @@ default_algorithm_param_config = {
     "objectives": [ObjectiveEnum.AVG_DL_RATE.value, ObjectiveEnum.ENERGY_EFFICIENCY.value],
     "algorithm": AlgorithmEnum.NSGA2.value,
     "moving_speed": 0.1,
-    "reset_rate_in_s": 20,
     "reset_rate_in_ngen": 5,
-    "reset_delay_in_s": 10,
     "moving_selection_percent": 30,
     "running_time_in_s": 600,
+    "iterations": 1,
 }
 
 
@@ -59,11 +58,14 @@ def get_network_folder_names() -> list[str]:
 class Main():
     def __init__(self, graph: Son) -> None:
         pygame.init()
+        self.highest_rssi = 0
+        self.lowest_rssi = 1000
         self.running_mode = RunningMode.LIVE.value
         self.finished = False
         self.use_greedy_assign = False
         self.topology_changed = False
         self.dt_since_last_history_update = 0
+        self.ticks_since_last_history_update = 0
         self.optimization_running = False
         self.dt_since_last_activation_profile_fetch = 0
         self.n_gen_since_last_fetch = 0
@@ -71,11 +73,14 @@ class Main():
         self.objective_history = []
         self.ngen_since_last_evo_reset = 0
         self.running_time_in_s = 0
+        self.running_ticks = 0
+        self.iterations = 0
         self.selected_node_id = None
         self.moving_users = {}
         self.show_moving_users = False
         self.queue_flags = {"activation_dict": False, "objective_space": False,
-                            "n_gen_since_last_fetch": False, "n_gen": False}
+                            "n_gen_since_last_fetch": False, "n_gen": False,
+                            "n_gen_since_last_reset": False}
         self.current_save_result_directory = ""
         self.pymoo_message_queue = multiprocessing.Queue()
         self.editor_message_queue = multiprocessing.Queue()
@@ -193,6 +198,11 @@ class Main():
             object_id="#save_button", text='save', manager=self.manager, container=self.
             ui_container)
 
+        self.capacity_label = pygame_gui.elements.UILabel(pygame.Rect(
+            (320, 110), (-1, 30)), "user capacity: 0", self.manager, self.ui_container)
+        self.user_count_label = pygame_gui.elements.UILabel(pygame.Rect(
+            (320, 140), (-1, 30)), "user count: 0", self.manager, self.ui_container)
+
         self.input_channel_bandwidth_label = pygame_gui.elements.UILabel(pygame.Rect(
             (20, 110), (-1, 30)), "channel bandwidth in HZ", self.manager, self.ui_container)
         self.input_channel_bandwidth = pygame_gui.elements.UITextEntryLine(pygame.Rect(
@@ -233,16 +243,16 @@ class Main():
         self.create_algo_param_ui_elements()
 
         # bottom UI
-        self.bin_packing_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
-            (20, 530), (-1, 30)), object_id="#bin_packing_button", text='bin packing',
+        self.switch_algorithm_mode_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
+            (20, 530), (-1, 30)), text='evo mode',
             manager=self.manager, container=self.ui_container)
 
         self.evo_start_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
-            (20, 560), (-1, 30)), text='start evo',
+            (20, 560), (-1, 30)), text='start',
             manager=self.manager, container=self.ui_container)
 
         self.evo_stop_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
-            (20, 590), (-1, 30)), text='stop evo',
+            (20, 590), (-1, 30)), text='stop',
             manager=self.manager, container=self.ui_container)
         self.evo_stop_button.disable()
 
@@ -441,7 +451,10 @@ class Main():
              self.moving_users[user_node_id][1] * self.algorithm_param_dic["moving_speed"]),
             update_network=False, initialize_edges=False)
 
-        self.topology_changed = True
+        if self.algorithm_param_dic["moving_speed"] != 0:
+            self.topology_changed = True
+        else:
+            self.topology_changed = False
 
     def update_direction_for_user(self, user_node_id: str):
 
@@ -471,16 +484,18 @@ class Main():
         current_energy_efficiency = self.son.get_energy_efficiency()
         current_avg_dl_datarate = self.son.get_average_dl_datarate()
         self.objective_history.append(
-            (round(self.running_time_in_s, 2), current_energy_efficiency, current_avg_dl_datarate))
+            (round(self.running_time_in_s, 2),
+             self.running_ticks, current_energy_efficiency, current_avg_dl_datarate))
+
         self.dt_since_last_history_update = 0
+        self.ticks_since_last_history_update = 0
 
     def trigger_evo_reset_invalid_activation_profile(self):
         # invoke evo_reset if threshhold is met
-        if self.dt_since_last_evo_reset >= self.algorithm_param_dic["reset_rate_in_s"] or self.ngen_since_last_evo_reset >= self.algorithm_param_dic["reset_rate_in_ngen"] and self.dt_since_last_evo_reset >= self.algorithm_param_dic["reset_delay_in_s"]:
+        if self.ngen_since_last_evo_reset >= self.algorithm_param_dic["reset_rate_in_ngen"] and self.dt_since_last_evo_reset > 5:
             # check if current activation profile is valid
             # or someone has moved since last call
             if self.topology_changed:
-
                 self.dt_since_last_evo_reset = 0
                 self.ngen_since_last_evo_reset = 0
                 self.topology_changed = False
@@ -557,6 +572,20 @@ class Main():
             node_id = self.node_clicked(target_pos)
             if node_id:
                 self.son.remove_node(node_id=node_id, update_network=False)
+        self.update_network_info_lables()
+
+    def update_network_info_lables(self):
+        beams = 0
+        bs_nodes_list = list(filter(lambda x: x[1]["type"] != "cell", self.son.graph.nodes.data()))
+        for _, bs_node in enumerate(bs_nodes_list):
+            beams += self.son.network_node_params[bs_node[1]["type"]]["antennas"]
+
+        user_count = len(
+            list(
+                filter(
+                    lambda x: x[1]["type"] == "cell", self.son.graph.nodes.data())))
+        self.capacity_label.set_text(f"network capacity: {beams}")
+        self.user_count_label.set_text(f"user count: {user_count}")
 
     def onclick_show_edges_checkbox(self):
         self.show_edges_checkbox_active = not self.show_edges_checkbox_active
@@ -598,6 +627,7 @@ class Main():
     def apply_adjacencies_from_json_file(self, file_name):
         layout_file_path = os.getcwd() + "/datastore/" + self.dropdown_menu_pick_network.selected_option + "/" + file_name
         self.son.load_graph_from_json_adjacency_file(layout_file_path, True)
+        self.update_network_info_lables()
 
     def on_entry_changed(self, event: pygame.Event):
 
@@ -632,6 +662,8 @@ class Main():
             self.algorithm_param_dic["moving_speed"] = float(event.text)
         if event.ui_element == self.input_create_movement_selection_percentage:
             self.algorithm_param_dic["moving_selection_percent"] = float(event.text)
+        if event.ui_element == self.input_iterations:
+            self.algorithm_param_dic["iterations"] = int(event.text)
 
     def on_dropdown_pick_network_changed(self, event: pygame.Event):
         if event.text != "from file":
@@ -686,6 +718,24 @@ class Main():
             self.son = Son()
         self.moving_users = {}
 
+    def reload_current_network_graph(self):
+        # Get the current working directory
+        current_directory = os.getcwd() + "/datastore/" + self.dropdown_menu_pick_network.selected_option
+        # List all files and directories in the current directory
+        directory_contents = os.listdir(current_directory)
+        adjacencies_file_name = ""
+        for item in directory_contents:
+            if "adjacencies" in item:
+                adjacencies_file_name = item
+        # load graph layout
+        self.apply_adjacencies_from_json_file(adjacencies_file_name)
+
+    def reload_current_moving_selection(self):
+        with open("datastore/" + self.dropdown_menu_pick_network.selected_option + "/moving_selections/" + self.dropdown_moving_selection.selected_option, 'r', encoding="utf-8") as openfile:
+            # Reading from json file
+            self.moving_users = json.load(openfile)
+            # update all algorithm config inputs
+
     def on_dropdown_input_algorithm_config_changed(self, event: pygame.Event, param_key: str):
         self.algorithm_param_dic[param_key] = event.text
 
@@ -735,6 +785,7 @@ class Main():
             self.son.load_graph_from_json_adjacency_file(
                 "datastore/" + self.dropdown_menu_pick_network.selected_option + "/" + self.
                 dropdown_pick_algo_config.selected_option + "/" + event.text, True)
+        self.update_network_info_lables()
         # TODO disable some other elements ?
 
     def on_dropdown_mode_changed(self, event: pygame.Event):
@@ -808,6 +859,14 @@ class Main():
             manager=self.manager,
             container=self.ui_container_live_config,
         )
+        self.input_iterations_label = pygame_gui.elements.UILabel(pygame.Rect(
+            (20, 180), (-1, 30)), "iterations", self.manager, self.ui_container_live_config)
+        self.input_iterations = pygame_gui.elements.UITextEntryLine(
+            pygame.Rect((220, 180),
+                        (100, 30)),
+            self.manager, self.ui_container_live_config, placeholder_text="iterations",
+            initial_text=str(self.algorithm_param_dic["iterations"]))
+        self.input_iterations.set_allowed_characters(text_input_integer_number_type_characters)
 
     def create_algo_param_ui_elements(self, creata_dropdown_pick_algo_config=True):
         self.input_pop_size_label = pygame_gui.elements.UILabel(pygame.Rect(
@@ -958,12 +1017,19 @@ class Main():
             self.input_wave_length.set_text(
                 str(self.network_params_dic[self.right_mouse_action]["wave_length"]))
 
-    def start_bin_packing(self):
-        # self.son.find_activation_profile_greedy_user(update_attributes=True)
-        self.use_greedy_assign = True
-        self.start_evo()
+    def switch_algorithm_mode(self):
+        self.use_greedy_assign = not self.use_greedy_assign
+        self.switch_algorithm_mode_button.set_text(
+            "greedy mode" if self.use_greedy_assign else "evo mode")
 
     def stop_evo(self):
+        self.editor_message_queue.put(
+            {"terminate": True, "graph": False, "reset": False, "send_results": True})
+        if self.use_greedy_assign:
+            self.finished = True
+
+    def force_stop_evo(self):
+        self.iterations = self.algorithm_param_dic["iterations"]
         self.editor_message_queue.put(
             {"terminate": True, "graph": False, "reset": False, "send_results": True})
         if self.use_greedy_assign:
@@ -1030,7 +1096,6 @@ class Main():
             )
 
     def start_evo(self):
-
         if self.running_mode == RunningMode.LIVE.value and self.dropdown_moving_selection.selected_option == "from file":
             self.popup.kill()
             self.popup = CustomConfirmationDialog(
@@ -1046,31 +1111,35 @@ class Main():
             return
 
         if os.path.exists("datastore/" + self.dropdown_menu_pick_network.selected_option):
-            result_directory_count = 1
-            directory_contents = os.listdir(
-                "datastore/" + self.dropdown_menu_pick_network.selected_option)
-            for item in directory_contents:
-                if "algorithm_config" in item:
-                    result_directory_count += 1
-            network_confg_name = "algorithm_config_" + str(
-                result_directory_count) + "_" + self.running_mode
-            if self.use_greedy_assign:
-                network_confg_name += "_greedy"
 
-            os.mkdir(
-                "datastore/" + self.dropdown_menu_pick_network.selected_option + "/" +
-                network_confg_name)
+            if self.iterations == 0:
+                # create new config folder
+                config_folder_count = 1
+                directory_contents = os.listdir(
+                    "datastore/" + self.dropdown_menu_pick_network.selected_option)
+                for item in directory_contents:
+                    if "algorithm_config" in item:
+                        config_folder_count += 1
+                network_confg_name = "algorithm_config_" + str(
+                    config_folder_count) + "_" + self.running_mode
+                if self.use_greedy_assign:
+                    network_confg_name += "_greedy"
 
-            self.current_save_result_directory = "datastore/" + self.dropdown_menu_pick_network.selected_option + \
-                "/" + network_confg_name
-            # save current algorithm config
-            with open(self.current_save_result_directory + "/" + network_confg_name + ".json", "w+", encoding="utf-8") as outfile:
-                if self.running_mode == RunningMode.LIVE.value:
-                    self.algorithm_param_dic["moving_selection_name"] = self.dropdown_moving_selection.selected_option
-                    json.dump(self.algorithm_param_dic, outfile)
-                else:
-                    json.dump(self.algorithm_param_dic, outfile)
+                os.mkdir(
+                    "datastore/" + self.dropdown_menu_pick_network.selected_option + "/" +
+                    network_confg_name)
 
+                self.current_save_result_directory = "datastore/" + self.dropdown_menu_pick_network.selected_option + \
+                    "/" + network_confg_name
+                # save current algorithm config
+                with open(self.current_save_result_directory + "/" + network_confg_name + ".json", "w+", encoding="utf-8") as outfile:
+                    if self.running_mode == RunningMode.LIVE.value:
+                        self.algorithm_param_dic["moving_selection_name"] = self.dropdown_moving_selection.selected_option
+                        json.dump(self.algorithm_param_dic, outfile)
+                    else:
+                        json.dump(self.algorithm_param_dic, outfile)
+
+            # start optimization
             if not self.use_greedy_assign:
                 optimization_process = multiprocessing.Process(target=start_optimization, args=(
                     int(self.algorithm_param_dic["pop_size"]),
@@ -1112,12 +1181,12 @@ class Main():
     def on_optimization_finished(self):
         # update algo param config dropdown
         self.optimization_running = False
-        self.use_greedy_assign = False
+        self.iterations += 1
         if self.running_mode == RunningMode.LIVE.value:
 
             json_data = json.dumps(self.objective_history)
-            # Save JSON data to a file
-            file_path = self.current_save_result_directory + "/objectives_result.json"
+            # Save objective JSON data to a file
+            file_path = f"{self.current_save_result_directory}/objectives_result_{self.iterations}.json"
             with open(file_path, 'w', encoding="utf-8") as file:
                 file.write(json_data)
 
@@ -1139,9 +1208,16 @@ class Main():
             manager=self.manager,
             container=self.ui_container,
         )
+
+        print("finished " + str(self.iterations) + " iteraiton")
+
         self.reset_all_after_run()
         self.enable_ui()
-        print("finished")
+
+        if self.iterations < self.algorithm_param_dic["iterations"]:
+            self.start_evo()
+        else:
+            self.iterations = 0
 
     def save_current_network(self):
 
@@ -1194,24 +1270,32 @@ class Main():
 
     def reset_queue_flags(self):
         self.queue_flags = {"activation_dict": False, "objective_space": False,
-                            "n_gen_since_last_fetch": False, "n_gen": False}
+                            "n_gen_since_last_fetch": False, "n_gen": False,
+                            "n_gen_since_last_reset": False}
 
     def reset_all_after_run(self):
         self.reset_queue_flags()
         self.activation = {}
-        self.moving_users = []
-        self.use_greedy_assign = False
+        # self.use_greedy_assign = False
         self.topology_changed = False
         self.dt_since_last_history_update = 0
+        self.ticks_since_last_history_update = 0
         self.optimization_running = False
         self.dt_since_last_evo_reset = 0
         self.objective_history = []
         self.ngen_since_last_evo_reset = 0
         self.running_time_in_s = 0
-        self.selected_node_id = None
-        self.moving_users = {}
-        self.show_moving_users = False
+        self.running_ticks = 0
+        # reset moving users vecors from file:
+        self.reload_current_moving_selection()
         self.finished = False
+        # reset topology -> load graph from file
+        self.reload_current_network_graph()
+        # empty message queues
+        while not self.editor_message_queue.empty():
+            self.editor_message_queue.get()
+        while not self.pymoo_message_queue.empty():
+            self.pymoo_message_queue.get()
 
     def run(self):
         while True:
@@ -1220,9 +1304,11 @@ class Main():
 
             if self.running_mode == RunningMode.LIVE.value and self.optimization_running:
                 self.dt_since_last_history_update += dt
+                self.ticks_since_last_history_update += 1
                 self.dt_since_last_evo_reset += dt
                 self.dt_since_last_activation_profile_fetch += dt
                 self.running_time_in_s += dt
+                self.running_ticks += 1
 
                 if not self.use_greedy_assign:
                     # send fetch data fetch request to process queue
@@ -1250,6 +1336,9 @@ class Main():
                             if callback_obj["n_gen"] is not False:
                                 self.queue_flags["n_gen"] = callback_obj["n_gen"]
 
+                            if callback_obj["n_gen_since_last_reset"] is not False:
+                                self.queue_flags["n_gen_since_last_reset"] = callback_obj["n_gen_since_last_reset"]
+
                     # react to queue messages
                     if self.queue_flags["activation_dict"] is not False and self.queue_flags["objective_space"] is not False:
 
@@ -1259,17 +1348,21 @@ class Main():
                     if self.queue_flags["n_gen_since_last_fetch"] is not False:
                         self.n_gen_since_last_fetch = self.queue_flags["n_gen_since_last_fetch"]
 
-                    if self.queue_flags["n_gen"] is not False:
-                        self.ngen_since_last_evo_reset = self.queue_flags["n_gen"]
+                    if self.queue_flags["n_gen_since_last_reset"] is not False:
+                        self.ngen_since_last_evo_reset = self.queue_flags["n_gen_since_last_reset"]
 
-                    if self.dt_since_last_history_update >= 1:
+                    # if self.dt_since_last_history_update >= 1:
+                    #     self.update_objective_history()
+                    if self.ticks_since_last_history_update >= 30:
                         self.update_objective_history()
+
                     # move users
                     self.move_some_users()
-                    # apply current activation and repair it
+                    # apply current activation and repair it -> choose highes rssi bs for invalid edges
+                    # use threshhold rssi for bad signals
                     if len(self.activation) > 0:
                         self.activation = self.son.apply_activation_dict(
-                            self.activation, update_network_attributes=True)
+                            self.activation, update_network_attributes=True, min_rssi=-1)
                     else:
                         # if no activation profile is present -> use greedy approach for all useres
                         self.son.find_activation_profile_greedy_user(update_attributes=True)
@@ -1277,7 +1370,9 @@ class Main():
                         self.on_optimization_finished()
 
                 if self.use_greedy_assign:
-                    if self.dt_since_last_history_update >= 1:
+                    # if self.dt_since_last_history_update >= 1:
+                    #     self.update_objective_history()
+                    if self.ticks_since_last_history_update >= 30:
                         self.update_objective_history()
                     # move users
                     self.move_some_users()
@@ -1286,7 +1381,9 @@ class Main():
                         self.on_optimization_finished()
 
                 # stop if running time is exceeded
-                if self.running_time_in_s >= self.algorithm_param_dic["running_time_in_s"]:
+                # if self.running_time_in_s >= self.algorithm_param_dic["running_time_in_s"]:
+                # stop if running time is over but time is translated into frames
+                if self.running_ticks >= self.algorithm_param_dic["running_time_in_s"] * 30:
                     self.stop_evo()
 
                 # reset queue_flags
@@ -1316,8 +1413,8 @@ class Main():
 
                 # GIU events
                 if event.type == pygame_gui.UI_BUTTON_PRESSED:
-                    if event.ui_element == self.bin_packing_button:
-                        self.start_bin_packing()
+                    if event.ui_element == self.switch_algorithm_mode_button:
+                        self.switch_algorithm_mode()
                     if event.ui_element == self.apply_button:
                         self.apply_params_from_text_inputs()
                     if event.ui_element == self.save_button:
@@ -1329,7 +1426,7 @@ class Main():
                     if event.ui_element == self.evo_start_button:
                         self.start_evo()
                     if event.ui_element == self.evo_stop_button:
-                        self.stop_evo()
+                        self.force_stop_evo()
                     if event.ui_element == self.create_movement_selection_button:
                         self.initialize_moving_users()
                     if event.ui_element == self.save_moving_selection_button:
