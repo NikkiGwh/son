@@ -13,7 +13,7 @@ style = {
                 "femto": "yellow",
                 "pico": "lime",
                 "cell": "black",
-                "moving": (178,6,255,1),
+                "moving": (178, 6, 255, 1),
                 "inactive": "grey",
                 "overload": "red"
             }

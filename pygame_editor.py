@@ -79,8 +79,8 @@ class Main():
         self.moving_users = {}
         self.show_moving_users = False
         self.queue_flags = {"activation_dict": False, "objective_space": False,
-                            "n_gen_since_last_fetch": False, "n_gen": False,
-                            "n_gen_since_last_reset": False}
+                            "n_gen_since_last_fetch": 0, "n_gen": 0,
+                            "n_gen_since_last_reset": 0}
         self.current_save_result_directory = ""
         self.pymoo_message_queue = multiprocessing.Queue()
         self.editor_message_queue = multiprocessing.Queue()
@@ -412,17 +412,17 @@ class Main():
             return
         self.moving_users = {}
         # randomly select x % of the useres for movement and dict with ids and moving vector
+        moving_user_count = round(percentage/100 * len(user_nodes))
         selection_list = np.random.choice(
-            [1, 0],
-            size=len(user_nodes),
-            p=[percentage / 100, 1 - percentage / 100])
-        selection_id_list = [x for index, x in enumerate(user_nodes) if selection_list[index] == 1]
+            user_nodes,
+            size=moving_user_count,
+            replace=False)
 
         # initialize moving directions randomly
-        deg = np.random.randint(0, 360, size=len(selection_id_list))
+        deg = np.random.randint(0, 360, size=len(selection_list))
         for index, deg_value in enumerate(deg):
             v = self.rotate_vector_by_deg(np.array([1, 0]), deg_value)
-            self.moving_users[selection_id_list[index]] = (v[0], v[1])
+            self.moving_users[selection_list[index]] = (v[0], v[1])
 
     def rotate_vector_by_deg(self, vec: np.ndarray, deg: int) -> np.ndarray:
         # rotate vector
@@ -460,7 +460,7 @@ class Main():
 
         while (self.check_direction_valid(user_node_id) is False):
             new_direction_numpy = self.rotate_vector_by_deg(
-                np.array(self.moving_users[user_node_id]), 30)
+                np.array(self.moving_users[user_node_id]), 90)
 
             self.moving_users[user_node_id] = (new_direction_numpy[0], new_direction_numpy[1])
 
@@ -492,7 +492,8 @@ class Main():
 
     def trigger_evo_reset_invalid_activation_profile(self):
         # invoke evo_reset if threshhold is met
-        if self.ngen_since_last_evo_reset >= self.algorithm_param_dic["reset_rate_in_ngen"] and self.dt_since_last_evo_reset > 5:
+        if self.ngen_since_last_evo_reset >= self.algorithm_param_dic["reset_rate_in_ngen"]-1:
+
             # check if current activation profile is valid
             # or someone has moved since last call
             if self.topology_changed:
@@ -512,7 +513,7 @@ class Main():
                      {"edge_list_with_attributes": edge_list_with_attributes,
                       "node_dic_with_attributes": node_dic_with_attributes
                       },
-                     "reset": True, "send_results": True})
+                     "reset": True})
 
     def on_left_click(self, target_pos: tuple[int, int]):
         node_id = self.selected_node_id
@@ -1024,14 +1025,14 @@ class Main():
 
     def stop_evo(self):
         self.editor_message_queue.put(
-            {"terminate": True, "graph": False, "reset": False, "send_results": True})
+            {"terminate": True, "graph": False, "reset": False})
         if self.use_greedy_assign:
             self.finished = True
 
     def force_stop_evo(self):
         self.iterations = self.algorithm_param_dic["iterations"]
         self.editor_message_queue.put(
-            {"terminate": True, "graph": False, "reset": False, "send_results": True})
+            {"terminate": True, "graph": False, "reset": False})
         if self.use_greedy_assign:
             self.finished = True
 
@@ -1270,8 +1271,8 @@ class Main():
 
     def reset_queue_flags(self):
         self.queue_flags = {"activation_dict": False, "objective_space": False,
-                            "n_gen_since_last_fetch": False, "n_gen": False,
-                            "n_gen_since_last_reset": False}
+                            "n_gen_since_last_fetch": 0, "n_gen": 0,
+                            "n_gen_since_last_reset": 0}
 
     def reset_all_after_run(self):
         self.reset_queue_flags()
@@ -1311,9 +1312,6 @@ class Main():
                 self.running_ticks += 1
 
                 if not self.use_greedy_assign:
-                    # send fetch data fetch request to process queue
-                    self.editor_message_queue.put(
-                        {"terminate": False, "graph": False, "reset": False, "send_results": True})
 
                     # trigger evo_reset if current activation profile violates son topology
                     self.trigger_evo_reset_invalid_activation_profile()
@@ -1321,6 +1319,7 @@ class Main():
                     # read message queue
                     while self.pymoo_message_queue.empty() is False:
                         callback_obj = self.pymoo_message_queue.get()
+
                         if callback_obj["finished"] == True:
                             # update dropdowns after normal completion and static mode
                             self.finished = True
@@ -1330,14 +1329,11 @@ class Main():
                                 self.queue_flags["activation_dict"] = callback_obj["activation_dict"]
                                 self.queue_flags["objective_space"] = callback_obj["objective_space"]
 
-                            if callback_obj["n_gen_since_last_fetch"] is not False:
-                                self.queue_flags["n_gen_since_last_fetch"] = callback_obj["n_gen_since_last_fetch"]
+                            self.queue_flags["n_gen_since_last_fetch"] = callback_obj["n_gen_since_last_fetch"]
 
-                            if callback_obj["n_gen"] is not False:
-                                self.queue_flags["n_gen"] = callback_obj["n_gen"]
+                            self.queue_flags["n_gen"] = callback_obj["n_gen"]
 
-                            if callback_obj["n_gen_since_last_reset"] is not False:
-                                self.queue_flags["n_gen_since_last_reset"] = callback_obj["n_gen_since_last_reset"]
+                            self.queue_flags["n_gen_since_last_reset"] = callback_obj["n_gen_since_last_reset"]
 
                     # react to queue messages
                     if self.queue_flags["activation_dict"] is not False and self.queue_flags["objective_space"] is not False:
@@ -1348,12 +1344,11 @@ class Main():
                     if self.queue_flags["n_gen_since_last_fetch"] is not False:
                         self.n_gen_since_last_fetch = self.queue_flags["n_gen_since_last_fetch"]
 
-                    if self.queue_flags["n_gen_since_last_reset"] is not False:
-                        self.ngen_since_last_evo_reset = self.queue_flags["n_gen_since_last_reset"]
+                    self.ngen_since_last_evo_reset = self.queue_flags["n_gen_since_last_reset"]
 
                     # if self.dt_since_last_history_update >= 1:
                     #     self.update_objective_history()
-                    if self.ticks_since_last_history_update >= 30:
+                    if self.ticks_since_last_history_update >= 30 and self.running_ticks <= self.algorithm_param_dic["running_time_in_s"] * 30:
                         self.update_objective_history()
 
                     # move users
@@ -1372,7 +1367,7 @@ class Main():
                 if self.use_greedy_assign:
                     # if self.dt_since_last_history_update >= 1:
                     #     self.update_objective_history()
-                    if self.ticks_since_last_history_update >= 30:
+                    if self.ticks_since_last_history_update >= 30 and self.running_ticks <= self.algorithm_param_dic["running_time_in_s"] * 30:
                         self.update_objective_history()
                     # move users
                     self.move_some_users()

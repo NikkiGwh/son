@@ -128,14 +128,12 @@ class Son:
                     (cell[1]["pos_x"], cell[1]["pos_y"]), (bs_node[1]["pos_x"], bs_node[1]["pos_y"]))
 
                 if current_rssi >= self.min_rssi:
-
                     attribute_dic = {}
                     attribute_dic["rssi"] = current_rssi
                     attribute_dic["distance"] = current_distance
                     attribute_dic["active"] = False
                     edge_list_with_attributes.append(
                         (cell[0], bs_node[0], attribute_dic))
-
         self.graph.add_edges_from(edge_list_with_attributes)
 
     def get_node_style(self):
@@ -479,7 +477,7 @@ class Son:
 
     def get_rssi_cell(
             self, user_id: str, beam: tuple[str, str],
-            moving_vector: tuple[float, float] = (0.0, 0.0)):
+            moving_vector: tuple[float, float] = (0.0, 0.0)) -> float:
         """ returns received signal power for cell with given beam (edge)
 
         Args:
@@ -490,7 +488,7 @@ class Son:
         """
         beam_vector = self.get_directional_vec(target_node_id=beam[0], source_node_id=beam[1])
         optimal_beam_vector = self.get_directional_vec(user_id, beam[1])
-        cos_beta = self.vec_cos(beam_vector, optimal_beam_vector)
+        cos_beta = 1 if beam[0] == user_id else self.vec_cos(beam_vector, optimal_beam_vector)
         bs_type = self.graph.nodes[beam[1]]["type"]
         if cos_beta <= 0 or cos_beta > 1:
             return 0
@@ -502,7 +500,9 @@ class Son:
             (self.graph.nodes.data()[beam[1]]["pos_x"],
              self.graph.nodes.data()[beam[1]]["pos_y"]))
 
-        return round(transmission_power * cos_beta * math.pow((wave_length / (4*math.pi*distance)), 2), 4)
+        result = round(
+            transmission_power * cos_beta * math.pow((wave_length / (4*math.pi*distance)), 2), 4)
+        return result
 
     def get_euclidean_distance(self, pos1: tuple[float, float], pos2: tuple[float, float]):
         return round(math.dist(pos1, pos2), 4)
@@ -679,7 +679,6 @@ class Son:
 
     def greedy_assign_user_to_bs(
             self, user_id: str, update_network_attributes=False, set_edge_activation=False):
-
         best_bs_id = ""
         best_rssi = -1
         for _, bs_id in enumerate(self.graph[user_id]):
@@ -703,6 +702,7 @@ class Son:
         activation_dict: dict[str, str] = {}
         for _, user_node in enumerate(
                 filter(self.filter_user_nodes, self.graph.nodes.data())):
+
             best_bs_id = self.greedy_assign_user_to_bs(user_node[0], set_edge_activation=True)
             activation_dict[user_node[0]] = best_bs_id
         if (update_attributes):

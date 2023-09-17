@@ -72,10 +72,12 @@ def convert_design_space_pop_to_decision_space_pop(
         repair=True):
     pop = []
     possible_activation_dict = son.get_possible_activations_dict()
+
     for _, individuum_dict in enumerate(design_space_pop):
         for _, user_id in enumerate(individuum_dict):
             # repair individuum if neccessary
             if repair and individuum_dict[user_id] not in possible_activation_dict[user_id]:
+
                 individuum_dict[user_id] = son.greedy_assign_user_to_bs(
                     user_id)
 
@@ -226,6 +228,7 @@ class SonRepairSampling(Sampling):
         # convert seed_pop to decision space and repair it to match current topology
         seed_pop_decision_space = convert_design_space_pop_to_decision_space_pop(
             problem.son_original, self.seed_pop_design_space, repair=True)
+
         return seed_pop_decision_space
 
 
@@ -318,23 +321,14 @@ class MyCallback(Callback):
                 queue_obj = self.editor_message_queue.get()
 
                 if queue_obj["terminate"] == True:
-                    queue_filled = True
+
+                    ##### react to terminate #####
+                    queue_filled = True  # -> will be filled in main loop of optimize method
                     self.data["external_termination"] = True
-                    # TODO loo if the selection actually picks the solution from pareto front !!!
-                    activation_dict = select_solution(self.son,
-                                                      decision_space=algorithm.pop.get("X"),
-                                                      objective_space=algorithm.pop.get("F"))
-                    self.pymoo_message_queue.put(
-                        {
-                            "activation_dict": activation_dict,
-                            "objective_space": algorithm.pop.get("F"),
-                            "finished": False,
-                            "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
-                            "n_gen_since_last_reset": self.n_gen_since_last_reset,
-                            "n_gen": algorithm.n_gen + self.total_gen
-                        })
                     algorithm.termination.terminate()
                 elif queue_obj["reset"] == True and queue_obj["graph"] is not False:
+                    ##### react to reset #####
+
                     queue_filled = True
                     self.data["external_reset"] = True
                     self.data["graph"] = queue_obj["graph"]
@@ -353,13 +347,16 @@ class MyCallback(Callback):
                          "n_gen": algorithm.n_gen + self.total_gen
                          })
                     algorithm.termination.terminate()
-                elif queue_obj["send_results"] == True:
+                else:
+                    ##### react to other cases #####
                     queue_filled = True
                     # TODO loo if the selection actually picks the solution from pareto front !!!
                     activation_dict = select_solution(
                         self.son,
                         decision_space=algorithm.pop.get("X"),
                         objective_space=algorithm.pop.get("F"))
+                    self.n_gen_since_last_fetch = 0
+
                     self.pymoo_message_queue.put(
                         {"activation_dict": activation_dict,
                          "objective_space": algorithm.pop.get("F"),
@@ -368,17 +365,23 @@ class MyCallback(Callback):
                          "n_gen_since_last_reset": self.n_gen_since_last_reset,
                          "n_gen": algorithm.n_gen + self.total_gen
                          })
-                    self.n_gen_since_last_fetch = 0
 
-            # write to pymoo message queue
+            ####### normal result propagation after ######
             if queue_filled is False:
+
+                # TODO loo if the selection actually picks the solution from pareto front !!!
+                activation_dict = select_solution(
+                    self.son,
+                    decision_space=algorithm.pop.get("X"),
+                    objective_space=algorithm.pop.get("F"))
+                self.n_gen_since_last_fetch = 0
                 self.pymoo_message_queue.put(
-                    {"activation_dict": False,
-                     "objective_space": False,
-                     "finished": False,
-                     "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
-                     "n_gen_since_last_reset": self.n_gen_since_last_reset,
-                     "n_gen": algorithm.n_gen + self.total_gen
+                    {"activation_dict": activation_dict,
+                        "objective_space": algorithm.pop.get("F"),
+                        "finished": False,
+                        "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
+                        "n_gen_since_last_reset": self.n_gen_since_last_reset,
+                        "n_gen": algorithm.n_gen + self.total_gen
                      })
 
 ################################ main ###################
@@ -409,7 +412,6 @@ def start_optimization(
     samplingConfig = None
     mutationConfig = None
     crossoverConfig = None
-    seed = 1
 
     verbose = True
     history = True
@@ -487,6 +489,7 @@ def start_optimization(
 
             # create design_space_pop with old son object -> otherwise conversion is wrong,
             # no repair necessary ?
+
             design_space_pop = convert_decision_Space_pop_to_design_space_pop(
                 son_obj, result.pop.get("X"), repair=False)
 
@@ -538,14 +541,13 @@ def start_optimization(
             son_obj,
             decision_space=result.X,
             objective_space=result.F)
-
         pymoo_message_queue.put(
             {"activation_dict": activation_dict,
              "objective_space": result.F,
              "finished": False,
-             "n_gen_since_last_fetch": False,
-             "n_gen_since_last_reset": False,
-             "n_gen": False
+             "n_gen_since_last_fetch": 0,
+             "n_gen_since_last_reset": 0,
+             "n_gen": n_generations
              })
 
     designSpace = convert_decision_Space_pop_to_design_space_pop(son_obj, result.X, repair=False)
@@ -587,7 +589,7 @@ def start_optimization(
                 "hist_cv": hist_cv,
                 "hist_cv_avg": hist_cv_avg
             }}
-
+        # convert designspae result to adjacency json
         for i, individuum in enumerate(designSpace):
             sonProblem.son_original.apply_activation_dict(individuum)
             objective_result_dic["results"].append(
@@ -599,6 +601,7 @@ def start_optimization(
                   ObjectiveEnum.POWER_CONSUMPTION.name: sonProblem.son_original.get_total_energy_consumption(),
                   ObjectiveEnum.ENERGY_EFFICIENCY.name: sonProblem.son_original.get_energy_efficiency(),
                   ObjectiveEnum.AVG_DL_RATE.name: sonProblem.son_original.get_average_dl_datarate()}))
+
             sonProblem.son_original.save_json_adjacency_graph_to_file(
                 filename=folder_path + "ind_result_" + str(i + 1) + ".json")
 
@@ -614,9 +617,9 @@ def start_optimization(
     pymoo_message_queue.put({"activation_dict": False,
                              "objective_space": False,
                              "finished": True,
-                             "n_gen_since_last_fetch": False,
-                             "n_gen_since_last_reset": False,
-                             "n_gen": False
+                             "n_gen_since_last_fetch": 0,
+                             "n_gen_since_last_reset": 0,
+                             "n_gen": n_generations
                              })
 
 
