@@ -17,6 +17,7 @@ import multiprocessing
 import numpy as np
 from math import cos, sin
 from son_pymoo import AlgorithmEnum, CrossoverEnum, MutationEnum, ObjectiveEnum, RunningMode, SamplingEnum, start_optimization
+import cProfile
 
 dropdown_menue_options_list = ["macro", "micro", "femto", "pico", "cell", "remove"]
 text_input_float_number_type_characters = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "."]
@@ -481,8 +482,8 @@ class Main():
         return False
 
     def update_objective_history(self):
-        current_energy_efficiency = self.son.get_energy_efficiency()
-        current_avg_dl_datarate = self.son.get_average_dl_datarate()
+        current_energy_efficiency = round(self.son.get_energy_efficiency(), 4)
+        current_avg_dl_datarate = round(self.son.get_average_dl_datarate(), 4)
         self.objective_history.append(
             (round(self.running_time_in_s, 2),
              self.running_ticks, current_energy_efficiency, current_avg_dl_datarate))
@@ -1495,3 +1496,4 @@ if __name__ == "__main__":
     son = Son()
     main = Main(son)
     main.run()
+    # cProfile.run("main.run()", sort="tottime")

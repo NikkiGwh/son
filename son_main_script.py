@@ -437,7 +437,7 @@ class Son:
         encoding_decoding_power = 0
         total_power = fix_power + transmission_chain_power + encoding_decoding_power
 
-        return round(total_power, 4)
+        return total_power
 
     def get_energy_efficiency_bs(self, bs_node_id: str):
         if self.graph.nodes.data()[bs_node_id]["active"] == False:
@@ -452,7 +452,7 @@ class Son:
                 count += 1
                 user_dl_datarate_sum += self.graph.nodes[edge[0]]["dl_datarate"]
 
-        return round(user_dl_datarate_sum / bs_total_power_consumption, 4)
+        return user_dl_datarate_sum / bs_total_power_consumption
 
     def get_sinr(self, cell_id: str):
 
@@ -473,7 +473,7 @@ class Son:
                         cell_id, (interfering_cell_id, bs_in_range_id))
 
         received_signal_power = self.get_rssi_cell(cell_id, (cell_id, connected_bs_id))
-        return round(received_signal_power / (interference_signal + received_signal_power), 4)
+        return received_signal_power / (interference_signal + received_signal_power)
 
     def get_rssi_cell(
             self, user_id: str, beam: tuple[str, str],
@@ -500,18 +500,18 @@ class Son:
             (self.graph.nodes.data()[beam[1]]["pos_x"],
              self.graph.nodes.data()[beam[1]]["pos_y"]))
 
-        result = round(
-            transmission_power * cos_beta * math.pow((wave_length / (4*math.pi*distance)), 2), 4)
-        return result
+        result_rssi = transmission_power * cos_beta * \
+            math.pow((wave_length / (4*math.pi*distance)), 2)
+        return result_rssi
 
     def get_euclidean_distance(self, pos1: tuple[float, float], pos2: tuple[float, float]):
-        return round(math.dist(pos1, pos2), 4)
+        return math.dist(pos1, pos2)
 
     def vec_length(self, v):
-        return round(math.sqrt(np.dot(v, v)), 4)
+        return math.sqrt(np.dot(v, v))
 
     def vec_cos(self, a, b):
-        return round(np.dot(a, b)/(self.vec_length(a)*self.vec_length(b)), 4)
+        return np.dot(a, b)/(self.vec_length(a)*self.vec_length(b))
 
     def get_directional_vec(self, target_node_id: str, source_node_id: str):
         return np.array(
@@ -574,7 +574,7 @@ class Son:
             count += 1
         if count == 0:
             return 0
-        return round(load_sum / count, 4)
+        return load_sum / count
 
     def get_avg_overlad(self):
         """returns accumulated avg overload over all base stations in %
@@ -590,7 +590,7 @@ class Son:
                                                                                  ["type"]][
                     "antennas"]
 
-        return round(overload_sum / traffic_capacity_for_overload_bs_sum, 4)
+        return overload_sum / traffic_capacity_for_overload_bs_sum
 
     def get_total_energy_consumption(self):
         """get total energy consumption of base stations, including dynamic and static power consumption
@@ -602,7 +602,7 @@ class Son:
         for _, bs_node in enumerate(filter(self.filter_active_bs_nodes, self.graph.nodes.data())):
             energy_consumption += bs_node[1]["total_power"]
 
-        return round(energy_consumption, 4)
+        return energy_consumption
 
     def get_energy_efficiency(self):
         """get energy efficiency of all base stations, including dynamic, static and standby power consumption
@@ -610,14 +610,6 @@ class Son:
         Returns:
            energy efficiency of base stations
         """
-        # efficiency_sum = 0
-        # count = 0
-        # for _, bs_node in enumerate(filter(self.filter_bs_nodes, self.graph.nodes.data())):
-        #     efficiency_sum += bs_node[1]["energy_efficiency"]
-        #     count += 1
-        # if count == 0:
-        #     return 0
-        # return round(efficiency_sum / count, 4)
         dl_rate_sum = 0
         power_consumption_sum = 0
         count = 0
@@ -630,7 +622,7 @@ class Son:
 
         if dl_rate_sum <= 0 or power_consumption_sum <= 0:
             return 0
-        return round(dl_rate_sum / power_consumption_sum, 4)
+        return dl_rate_sum / power_consumption_sum
 
     def get_average_sinr(self):
         """get average sinr over all cells
@@ -644,7 +636,7 @@ class Son:
                 filter(self.filter_user_nodes, self.graph.nodes.data())):
             sinr_sum += cell_node[1]["sinr"]
             count += 1
-        return round(sinr_sum/count, 4)
+        return sinr_sum/count
 
     def get_average_rssi(self):
         """get average rssi over all cells
@@ -658,7 +650,7 @@ class Son:
                 filter(self.filter_user_nodes, self.graph.nodes.data())):
             rssi_sum += cell_node[1]["rssi"]
             count += 1
-        return round(rssi_sum/count, 4)
+        return rssi_sum/count
 
     def get_average_dl_datarate(self):
         """get average download datarate over all cells
@@ -673,7 +665,7 @@ class Son:
             dl_datarate_sum += cell_node[1]["dl_datarate"]
             count += 1
 
-        return round(dl_datarate_sum/count, 4)
+        return dl_datarate_sum/count
 
     ################################ greedy assingment methods ################################
 
