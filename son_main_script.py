@@ -762,7 +762,7 @@ class Son:
 
     def apply_activation_dict(
             self, activation_dict: dict[str, str],
-            update_network_attributes=True, min_rssi=-1.0):
+            update_network_attributes=True, min_rssi=-1.0, greedy_assign_list=[]):
         """takes activation dict  and applies it on network accordingly
         and also repairs encoding if there are any violations against the current topology
 
@@ -772,7 +772,7 @@ class Son:
             repaired activation encoding
         """
         for _, user_id in enumerate(activation_dict):
-            if activation_dict[user_id] in self.graph[user_id]:
+            if activation_dict[user_id] in self.graph[user_id] and user_id not in greedy_assign_list:
                 # apply valid activation
                 for _, bs_id in enumerate(self.graph[user_id]):
                     if bs_id == activation_dict[user_id]:

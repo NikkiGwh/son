@@ -39,6 +39,7 @@ default_algorithm_param_config = {
     "moving_selection_percent": 30,
     "running_time_in_s": 600,
     "iterations": 1,
+    "greedy_to_moving": False
 }
 
 
@@ -244,26 +245,26 @@ class Main():
         self.create_algo_param_ui_elements()
 
         # bottom UI
-        self.switch_algorithm_mode_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
-            (20, 530), (-1, 30)), text='evo mode',
-            manager=self.manager, container=self.ui_container)
+        # self.switch_algorithm_mode_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
+        #     (20, 530), (-1, 30)), text='evo mode',
+        #     manager=self.manager, container=self.ui_container)
 
-        self.evo_start_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
-            (20, 560), (-1, 30)), text='start',
-            manager=self.manager, container=self.ui_container)
+        # self.evo_start_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
+        #     (20, 560), (-1, 30)), text='start',
+        #     manager=self.manager, container=self.ui_container)
 
-        self.evo_stop_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
-            (20, 590), (-1, 30)), text='stop',
-            manager=self.manager, container=self.ui_container)
-        self.evo_stop_button.disable()
+        # self.evo_stop_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
+        #     (20, 590), (-1, 30)), text='stop',
+        #     manager=self.manager, container=self.ui_container)
+        # self.evo_stop_button.disable()
 
-        self.dropdown_pick_mode = pygame_gui.elements.UIDropDownMenu(
-            options_list=[item.value for item in RunningMode],
-            starting_option=self.running_mode,
-            relative_rect=pygame.Rect((20, 620), (200, 30)),
-            manager=self.manager,
-            container=self.ui_container,
-        )
+        # self.dropdown_pick_mode = pygame_gui.elements.UIDropDownMenu(
+        #     options_list=[item.value for item in RunningMode],
+        #     starting_option=self.running_mode,
+        #     relative_rect=pygame.Rect((20, 620), (200, 30)),
+        #     manager=self.manager,
+        #     container=self.ui_container,
+        # )
 
         # live config elements
         self.create_live_param_ui_elements()
@@ -593,6 +594,12 @@ class Main():
         self.show_edges_checkbox_active = not self.show_edges_checkbox_active
         self.show_edges_checkbox.set_text("hide" if self.show_edges_checkbox_active else "show")
 
+    def toggle_greedy_to_moving(self):
+        self.algorithm_param_dic["greedy_to_moving"] = not self.algorithm_param_dic["greedy_to_moving"]
+        self.greedy_to_moving_button.set_text(
+            "greedy for moving"
+            if self.algorithm_param_dic["greedy_to_moving"] else "evo for moving")
+
     def show_moving_selection_checkbox(self):
         self.show_moving_users = not self.show_moving_users
         self.show_moving_selection_button.set_text("hide" if self.show_moving_users else "show")
@@ -767,6 +774,10 @@ class Main():
                 self.input_pop_size.kill()
                 self.input_eliminate_duplicates.kill()
                 self.dropdown_pick_result.kill()
+                self.evo_stop_button.kill()
+                self.evo_start_button.kill()
+                self.dropdown_pick_mode.kill()
+                self.greedy_to_moving_button.kill()
                 self.create_algo_param_ui_elements(creata_dropdown_pick_algo_config=False)
 
                 self.ui_container_live_config.kill()
@@ -975,6 +986,36 @@ class Main():
             manager=self.manager,
             default_selection=self.algorithm_param_dic["objectives"]
         )
+
+        self.switch_algorithm_mode_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
+            (20, 530), (-1, 30)), text='evo mode',
+            manager=self.manager, container=self.ui_container)
+
+        self.evo_start_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
+            (20, 560), (-1, 30)), text='start',
+            manager=self.manager, container=self.ui_container)
+
+        self.evo_stop_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
+            (20, 590), (-1, 30)), text='stop',
+            manager=self.manager, container=self.ui_container)
+        self.evo_stop_button.disable()
+
+        self.dropdown_pick_mode = pygame_gui.elements.UIDropDownMenu(
+            options_list=[item.value for item in RunningMode],
+            starting_option=self.running_mode,
+            relative_rect=pygame.Rect((20, 620), (200, 30)),
+            manager=self.manager,
+            container=self.ui_container,
+        )
+        self.greedy_to_moving_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
+            (220, 620),
+            (-1, 30)),
+            text='evo for moving'
+            if
+            not self.algorithm_param_dic["greedy_to_moving"] else
+            "greedy for moving",
+            manager=self.manager,
+            container=self.ui_container)
 
     def on_dropdown_changed(self, event: pygame.Event):
         self.right_mouse_action = event.text
@@ -1355,10 +1396,15 @@ class Main():
                     # move users
                     self.move_some_users()
                     # apply current activation and repair it -> choose highes rssi bs for invalid edges
-                    # use threshhold rssi for bad signals
                     if len(self.activation) > 0:
-                        self.activation = self.son.apply_activation_dict(
-                            self.activation, update_network_attributes=True, min_rssi=-1)
+                        if self.algorithm_param_dic["greedy_to_moving"]:
+                            self.activation = self.son.apply_activation_dict(
+                                self.activation, update_network_attributes=True, min_rssi=-1,
+                                greedy_assign_list=self.moving_users)
+                        else:
+                            self.activation = self.son.apply_activation_dict(
+                                self.activation, update_network_attributes=True, min_rssi=-1)
+
                     else:
                         # if no activation profile is present -> use greedy approach for all useres
                         self.son.find_activation_profile_greedy_user(update_attributes=True)
@@ -1429,6 +1475,8 @@ class Main():
                         self.save_current_moving_selection()
                     if event.ui_element == self.show_moving_selection_button:
                         self.show_moving_selection_checkbox()
+                    if event.ui_element == self.greedy_to_moving_button:
+                        self.toggle_greedy_to_moving()
                 if event.type == pygame_gui.UI_DROP_DOWN_MENU_CHANGED:
                     if event.ui_element == self.dropdown_menu:
                         self.on_dropdown_changed(event)
