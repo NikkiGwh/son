@@ -295,11 +295,11 @@ class Main():
         result_list = ["from file"]
 
         if self.dropdown_menu_pick_network.selected_option != "from file":
-            directory_contents = os.listdir(
-                "datastore/" + self.dropdown_menu_pick_network.selected_option)
-
+            directory_path = "datastore/" + self.dropdown_menu_pick_network.selected_option
+            directory_contents = os.listdir(directory_path)
             for item in directory_contents:
-                if "algorithm_config" in item:
+                if os.path.isdir(
+                        os.path.join(directory_path, item)) and item != "moving_selections":
                     result_list.append(item)
 
         return result_list
@@ -626,9 +626,10 @@ class Main():
         # apply params on network
         self.son.apply_network_node_attributes(self.config_params)
         # load moving selections
-        with open("datastore/" + self.dropdown_menu_pick_network.selected_option + "/moving_selections/" + str(self.config_params["moving_selection_name"]) + ".json", 'r', encoding="utf-8") as openfile:
-            # Reading from json file
-            self.moving_users = json.load(openfile)
+        if str(self.config_params["moving_selection_name"]) != "":
+            with open("datastore/" + self.dropdown_menu_pick_network.selected_option + "/moving_selections/" + str(self.config_params["moving_selection_name"]) + ".json", 'r', encoding="utf-8") as openfile:
+                # Reading from json file
+                self.moving_users = json.load(openfile)
 
         # set simulation moving_speed from current_param_config
         self.moving_speed_in_m_per_second = round(float(self.config_params["moving_speed"]) / 30, 4)
@@ -754,7 +755,7 @@ class Main():
         self.apply_adjacencies_from_json_file(adjacencies_file_name)
 
     def reload_current_moving_selection(self):
-        with open("datastore/" + self.dropdown_menu_pick_network.selected_option + "/moving_selections/" + self.dropdown_moving_selection.selected_option, 'r', encoding="utf-8") as openfile:
+        with open("datastore/" + self.dropdown_menu_pick_network.selected_option + "/moving_selections/" + self.dropdown_moving_selection.selected_option + ".json", 'r', encoding="utf-8") as openfile:
             # Reading from json file
             self.moving_users = json.load(openfile)
             # update all algorithm config inputs
@@ -774,6 +775,8 @@ class Main():
         if event.text == "from file":
             self.dropdown_pick_result.disable()
         else:
+            print("datastore/" + self.dropdown_menu_pick_network.selected_option + "/" + event.text +
+                  "/" + event.text + ".json")
             with open("datastore/" + self.dropdown_menu_pick_network.selected_option + "/" + event.text + "/" + event.text + ".json", 'r', encoding="utf-8") as openfile:
                 # Reading params from json file
                 self.config_params = json.load(openfile)
@@ -884,11 +887,11 @@ class Main():
 
         self.dropdown_moving_selection = pygame_gui.elements.UIDropDownMenu(
             options_list=self.get_moving_selections_for_current_network(),
-            starting_option=str(self.config_params["moving_selection_name"]),
-            relative_rect=pygame.Rect((220, 150), (200, 30)),
-            manager=self.manager,
-            container=self.ui_container_live_config,
-        )
+            starting_option=str(self.config_params["moving_selection_name"])
+            if str(self.config_params["moving_selection_name"]) != "" else "from file",
+            relative_rect=pygame.Rect((220, 150),
+                                      (200, 30)),
+            manager=self.manager, container=self.ui_container_live_config,)
         self.input_iterations_label = pygame_gui.elements.UILabel(pygame.Rect(
             (20, 180), (-1, 30)), "iterations", self.manager, self.ui_container_live_config)
         self.input_iterations = pygame_gui.elements.UITextEntryLine(
