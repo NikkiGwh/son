@@ -98,7 +98,8 @@ class Son:
     def __init__(self, adjacencies_file_name: str = "", parameter_config_file_name: str = "") -> None:
 
         # initialize super parameter
-        self.min_rssi = 0.8
+        # this is -80 dbm
+        self.min_rssi = 0.000000000010000001
         self.network_node_params = default_node_params
         # initialize network
         self.graph = nx.Graph()
