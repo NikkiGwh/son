@@ -48,42 +48,42 @@ class NodeType(Enum):
 default_node_params = {
     "macro": {
         "type": "macro",
-        "tx_power": 20,
+        "tx_power": 31.622776601683793,
         "static_power": 4.0,
         "standby_power": 2.0,
         "antennas": 8,
-        "frequency": 0,
-        "wave_length": 80,
+        "frequency": 6.0,
+        "wave_length": 0.04996540966666666,
         "channel_bandwidth": 10
     },
     "micro": {
         "type": "micro",
-        "tx_power": 1,
+        "tx_power": 3.162277660168379,
         "static_power": 1.5,
         "standby_power": 0.75,
         "antennas": 3,
-        "frequency": 0,
-        "wave_length": 80,
+        "frequency": 16,
+        "wave_length": 0.018737028625,
         "channel_bandwidth": 10
     },
     "femto": {
         "type": "femto",
-        "tx_power": 1,
+        "tx_power": 0.1,
         "static_power": 4.0,
         "standby_power": 0,
         "antennas": 4,
-        "frequency": 0,
-        "wave_length": 60,
+        "frequency": 100,
+        "wave_length": 0.00299792,
         "channel_bandwidth": 10
     },
     "pico": {
         "type": "pico",
-        "tx_power": 1,
+        "tx_power": 0.25118864315095796,
         "static_power": 4.0,
         "standby_power": 0,
         "antennas": 4,
-        "frequency": 0,
-        "wave_length": 40,
+        "frequency": 100,
+        "wave_length": 0.00299792,
         "channel_bandwidth": 10
     },
     "cell": {
@@ -99,7 +99,7 @@ class Son:
 
         # initialize super parameter
         # this is -80 dbm
-        self.min_rssi = 0.000000000010000001
+        self.min_rssi = 1.0000000000000001e-11
         self.network_node_params = default_node_params
         # initialize network
         self.graph = nx.Graph()
@@ -127,7 +127,6 @@ class Son:
                 current_rssi = self.get_rssi_cell(cell[0], (cell[0], bs_node[0]))
                 current_distance = self.get_euclidean_distance(
                     (cell[1]["pos_x"], cell[1]["pos_y"]), (bs_node[1]["pos_x"], bs_node[1]["pos_y"]))
-
                 if current_rssi >= self.min_rssi:
                     attribute_dic = {}
                     attribute_dic["rssi"] = current_rssi
