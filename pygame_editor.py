@@ -53,7 +53,7 @@ text_input_integer_number_type_characters = ["1", "2", "3", "4", "5", "6", "7", 
 default_algorithm_param_config = {
     "pop_size": 200,
     "n_offsprings": 40,
-    "n_generations": 10000,
+    "n_generations": 10000000,
     "termination": "",
     "sampling": SamplingEnum.RANDOM_SAMPLING.value,
     "crossover": CrossoverEnum.UNIFORM_CROSSOVER.value,
@@ -87,7 +87,7 @@ def get_network_folder_names() -> list[str]:
 
 
 class Main():
-    def __init__(self, graph: Son) -> None:
+    def __init__(self, graph: Son, ui_mode=True, network_name="", config_name="") -> None:
         pygame.init()
         self.highest_rssi = 0
         self.lowest_rssi = 1000
@@ -348,22 +348,33 @@ class Main():
 
     def update_direction_for_user(self, user_node_id: str):
 
-        while (self.check_direction_valid(user_node_id) is False):
+        moving_vector = (
+            self.moving_users[user_node_id][0] * self.config_params["moving_speed"],
+            self.moving_users[user_node_id][1] * self.config_params["moving_speed"])
+        (next_x_pos, next_y_pos) = self.son.graph.nodes.data()[
+            user_node_id]["pos_x"] + moving_vector[0], self.son.graph.nodes.data()[user_node_id]["pos_y"] + moving_vector[1]
+
+        if not (next_x_pos <= 10000 and next_x_pos >= 0 and next_y_pos >= 0 and next_y_pos <= 10000):
+            new_direction_numpy = self.rotate_vector_by_deg(
+                np.array(self.moving_users[user_node_id]), 180)
+            self.moving_users[user_node_id] = (new_direction_numpy[0], new_direction_numpy[1])
+
+        while (self.check_direction_valid(user_node_id, moving_vector) is False):
+
             new_direction_numpy = self.rotate_vector_by_deg(
                 np.array(self.moving_users[user_node_id]), 90)
 
             self.moving_users[user_node_id] = (new_direction_numpy[0], new_direction_numpy[1])
+            moving_vector = (
+                self.moving_users[user_node_id][0] * self.config_params["moving_speed"],
+                self.moving_users[user_node_id][1] * self.config_params["moving_speed"])
 
-    def check_direction_valid(self, user_node_id: str):
+    def check_direction_valid(self, user_node_id: str, moving_vector):
 
         for _, edge in enumerate(self.son.graph[user_node_id].items()):
-
             next_rssi = self.son.get_rssi_cell(
                 user_node_id, (user_node_id, edge[0]),
-                moving_vector=(self.moving_users[user_node_id][0] * self.config_params
-                               ["moving_speed"],
-                               self.moving_users[user_node_id][1] * self.config_params
-                               ["moving_speed"]))
+                moving_vector=moving_vector)
 
             if next_rssi > self.son.min_rssi:
                 return True
@@ -372,6 +383,7 @@ class Main():
 
     def update_objective_history(self):
         current_energy_efficiency = self.son.get_energy_efficiency()
+        # current_energy_efficiency = self.son.get_total_energy_consumption()
         current_avg_dl_datarate = self.son.get_average_dl_datarate()
         self.objective_history.append(
             (round(self.running_time_in_s, 2),
@@ -1154,7 +1166,7 @@ class Main():
             self.dropdown_moving_selection.kill()
             self.dropdown_moving_selection = pygame_gui.elements.UIDropDownMenu(
                 options_list=self.get_moving_selections_for_current_network(),
-                starting_option=name + ".json",
+                starting_option=name,
                 relative_rect=pygame.Rect((220, 150), (200, 30)),
                 manager=self.manager,
                 container=self.ui_container_live_config,
@@ -1551,7 +1563,16 @@ class Main():
 
 
 if __name__ == "__main__":
-    son = Son()
-    main = Main(son)
-    main.run()
-    # cProfile.run("main.run()", sort="tottime")
+
+    if len(sys.argv) > 1:
+
+        son = Son()
+        main = Main(son)
+        main.run()
+
+        print(sys.argv)
+    else:
+        son = Son()
+        main = Main(son)
+        main.run()
+        # cProfile.run("main.run()", sort="tottime")

@@ -390,7 +390,7 @@ class MyCallback(Callback):
 
 def start_optimization(
         pop_size: int,
-        n_offsprings: int,
+        n_offsprings: int, ## pop_size is pymoo default
         n_generations: int,
         termination: str,
         sampling: str,
@@ -404,8 +404,8 @@ def start_optimization(
         pymoo_message_queue: multiprocessing.Queue,
         editor_message_queue: multiprocessing.Queue,
         running_mode: str,
-        prob_mutation: float = 0.5,
-        prob_crossover: float = 0.9,
+        prob_mutation: float = 0.9,  # 0.9 is pymoo default
+        prob_crossover: float = 0.9,  # 0.9 is pymoo default
         seed=None):
 
     pymooAlgorithm = None

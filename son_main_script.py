@@ -234,24 +234,21 @@ class Son:
         self.update_user_node_attributes()
         self.update_bs_node_attributes()
         self.update_user_node_dl_datarate()
-        self.update_edge_attributes()
+        # self.update_edge_attributes()
 
     def update_bs_node_attributes(self):
         """update dynamic bs_node attributes (traffic, total_power, active)
         also deactivate (standby) bs stations which don't have active edges
         """
-        # deactivate bs stations which don't have active edges
-        # set traffic, total_power to 0 for inactive bs nodes
+        # deactivate bs stations which don't have active edges and activate those which have active connections
+        # set traffic, total_power to 0, total_power to standby for inactive bs nodes
         for _, bs_node in enumerate(
-            filter(
-                lambda x: self.filter_bs_nodes(node=x),
-                self.graph.nodes.data())):
+                filter(self.filter_bs_nodes, self.graph.nodes.data())):
 
             connected_users = [x[0] for x in self.graph[bs_node[0]].items() if x[1]["active"]]
             if len(connected_users) == 0:
                 # calculation for inactive users
                 bs_node[1]["active"] = False
-                # TODO change total power calculation
                 self.graph.nodes[bs_node[0]]["total_power"] = self.network_node_params[bs_node[1][
                     "type"]]["standby_power"]
                # self.graph.nodes[bs_node[0]]["energy_efficiency"] = 0
@@ -275,7 +272,6 @@ class Son:
                                                                         ["type"]]["antennas"]if traffic_sum > 0 else 0
             # calculate total power consumption for bs -> call only after traffic and load estimations are done
             bs_node[1]["total_power"] = self.get_total_bs_power(bs_node[0])
-            # bs_node[1]["energy_efficiency"] = self.get_energy_efficiency_bs(bs_node[0])
 
     def update_user_node_attributes(self):
         """ update dynamic user_node attributes depending on active edge (sinr, rssi)
@@ -431,9 +427,10 @@ class Son:
             return self.network_node_params[bs_type]["standby_power"]
 
         fix_power = self.network_node_params[bs_type]["static_power"]
-        antennas = self.graph.nodes.data()[bs_node_id]["traffic"] if self.graph.nodes.data()[
+        beams = self.graph.nodes.data()[bs_node_id]["traffic"] if self.graph.nodes.data()[
             bs_node_id]["load"] <= 1 else self.network_node_params[bs_type]["antennas"]
-        transmission_chain_power = self.network_node_params[bs_type]["tx_power"] * antennas
+
+        transmission_chain_power = self.network_node_params[bs_type]["tx_power"] * beams
         encoding_decoding_power = 0
         total_power = fix_power + transmission_chain_power + encoding_decoding_power
 
@@ -445,11 +442,9 @@ class Son:
         bs_total_power_consumption = self.graph.nodes.data()[bs_node_id]["total_power"]
 
         user_dl_datarate_sum = 0
-        count = 0
 
         for _, edge in enumerate(self.graph[bs_node_id].items()):
             if edge[1]["active"]:
-                count += 1
                 user_dl_datarate_sum += self.graph.nodes[edge[0]]["dl_datarate"]
 
         return user_dl_datarate_sum / bs_total_power_consumption
@@ -499,9 +494,11 @@ class Son:
              self.graph.nodes.data()[user_id]["pos_y"] + moving_vector[1]),
             (self.graph.nodes.data()[beam[1]]["pos_x"],
              self.graph.nodes.data()[beam[1]]["pos_y"]))
-
-        result_rssi = transmission_power * cos_beta * \
-            math.pow((wave_length / (4*math.pi*distance)), 2)
+        if distance == 0:
+            return 0
+        else:
+            result_rssi = transmission_power * cos_beta * \
+                math.pow((wave_length / (4*math.pi*distance)), 2)
         return result_rssi
 
     def get_euclidean_distance(self, pos1: tuple[float, float], pos2: tuple[float, float]):
@@ -610,19 +607,13 @@ class Son:
         Returns:
            energy efficiency of base stations
         """
-        dl_rate_sum = 0
-        power_consumption_sum = 0
-        count = 0
-        for _, bs_node in enumerate(filter(self.filter_bs_nodes, self.graph.nodes.data())):
-            power_consumption_sum += bs_node[1]["total_power"]
-            count += 1
+        power_consumption_sum = self.get_total_energy_consumption()
 
-        for _, user_node in enumerate(filter(self.filter_user_nodes, self.graph.nodes.data())):
-            dl_rate_sum += user_node[1]["dl_datarate"]
+        avg_dl_datarate = self.get_average_dl_datarate()
 
-        if dl_rate_sum <= 0 or power_consumption_sum <= 0:
+        if avg_dl_datarate <= 0 or power_consumption_sum <= 0:
             return 0
-        return dl_rate_sum / power_consumption_sum
+        return avg_dl_datarate / power_consumption_sum
 
     def get_average_sinr(self):
         """get average sinr over all cells
