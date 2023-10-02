@@ -1,18 +1,11 @@
-from xmlrpc.client import boolean
-from matplotlib.figure import Figure
 import networkx as nx
-from pyparsing import with_attribute
-from matplotlib import pyplot as plt
 import numpy as np
 from sklearn.metrics import euclidean_distances
 from sklearn.utils import gen_batches
 import math
-import matplotlib.animation as animation
 from enum import Enum
 from functools import reduce, total_ordering
 
-from IPython.core.display import HTML
-from IPython.display import display
 import pandas as pd
 
 from networkx.readwrite import json_graph
@@ -822,42 +815,6 @@ class Son:
         for _, node in enumerate(self.graph.nodes.data()):
             pos[str(node[0])] = [node[1]["pos_x"], node[1]["pos_y"]]
         return pos
-
-    def draw_current_network(self):
-        pos = self.get_node_pos()
-        node_colors, node_sizes, node_edge_colors, node_alphas = self.get_node_style()
-        edge_colors, edge_width = self.get_edge_style()
-        options_edges = {
-            'width': edge_width,
-            "edge_color": edge_colors,
-            "pos": pos,
-        }
-        options_nodes = {
-            "alpha": node_alphas,
-            'node_color': node_colors,
-            'node_size': node_sizes,
-            "pos": pos,
-            "edgecolors": node_edge_colors,
-        }
-
-        label_dic = {}
-        for _, user_node in enumerate(filter(self.filter_user_nodes, self.graph.nodes.data())):
-            label_dic[user_node[0]] = user_node[0]
-
-        for _, bs_node in enumerate(filter(self.filter_bs_nodes, self.graph.nodes.data())):
-            label_dic[bs_node[0]] = str(bs_node[0])
-
-        label_positions: dict[str, list[int]] = {}
-
-        for _, pos_item in enumerate(pos.items()):
-            label_positions[str(pos_item[0])] = [pos_item[1][0], pos_item[1][1] + 1]
-
-        plt.title(f"network")
-        nx.drawing.nx_pylab.draw_networkx_edges(self.graph, **options_edges)
-        nx.drawing.nx_pylab.draw_networkx_nodes(self.graph, **options_nodes)
-        # nx.drawing.nx_pylab.draw_networkx_labels(
-        #     self.graph, label_positions, label_dic, font_color="black")
-        plt.show()
 
 
 ################# script main #######################

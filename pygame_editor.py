@@ -1,7 +1,5 @@
 
 from copy import deepcopy
-from gc import disable
-from genericpath import isdir
 import math
 from pygame_gui._constants import UI_BUTTON_PRESSED
 import pygame
@@ -9,15 +7,15 @@ import sys
 from pygame_settings import *
 import networkx as nx
 import json
-from son_main_script import BaseStationOrder, BinPackingType, CellOrderTwo, Son, default_node_params
+from son_main_script import Son, default_node_params
 import pygame_gui
-import re
 import os
 import multiprocessing
 import numpy as np
 from math import cos, sin
 from son_pymoo import AlgorithmEnum, CrossoverEnum, MutationEnum, ObjectiveEnum, RunningMode, SamplingEnum, start_optimization
 import cProfile
+import re
 from scipy.constants import speed_of_light
 
 
@@ -87,9 +85,9 @@ def get_network_folder_names() -> list[str]:
 
 
 class Main():
-    def __init__(self, graph: Son, auto_mode=False, network_name="", config_name="") -> None:
+    def __init__(self, graph: Son, script_mode=False, network_name="", config_name="") -> None:
         pygame.init()
-        self.auto_mode = auto_mode
+        self.script_mode = script_mode
         self.running_mode = RunningMode.LIVE.value
         self.finished = False
         self.moving_speed_in_m_per_second = 0
@@ -157,12 +155,12 @@ class Main():
         self.ui_container_live_config.disable()
 
         # auto mode
-        if auto_mode:
+        if script_mode:
             # load network
             self.dropdown_menu_pick_network.selected_option = network_name
             self.input_algo_config_name.set_text(config_name)
 
-            event: pygame.Event = pygame.Event(0)
+            event: pygame.event.Event = pygame.event.Event(0)
             event.text = network_name
             self.on_dropdown_pick_network_changed(event)
 
@@ -575,7 +573,7 @@ class Main():
         self.son.load_graph_from_json_adjacency_file(layout_file_path, True)
         self.update_network_info_lables()
 
-    def on_entry_changed(self, event: pygame.Event):
+    def on_entry_changed(self, event: pygame.event.Event):
 
         pattern = r'^[-+]?(\d+(\.\d*)?|\.\d+)$'
         if not re.match(pattern, event.text):
@@ -617,7 +615,7 @@ class Main():
         if event.ui_element == self.input_iterations:
             self.config_params["iterations"] = int(event.text)
 
-    def on_dropdown_pick_network_changed(self, event: pygame.Event):
+    def on_dropdown_pick_network_changed(self, event: pygame.event.Event):
         if event.text != "from file":
             # Get the current working directory
             current_directory = os.getcwd() + "/datastore/" + event.text
@@ -692,10 +690,10 @@ class Main():
         else:
             self.moving_users = {}
 
-    def on_dropdown_input_algorithm_config_changed(self, event: pygame.Event, param_key: str):
+    def on_dropdown_input_algorithm_config_changed(self, event: pygame.event.Event, param_key: str):
         self.config_params[param_key] = event.text
 
-    def on_selectionlist_input_objectives_changed(self, event: pygame.Event):
+    def on_selectionlist_input_objectives_changed(self, event: pygame.event.Event):
         self.config_params["objectives"] = self.input_objectives.get_multi_selection()
 
         if (len(self.config_params["objectives"]) == 0):
@@ -703,7 +701,7 @@ class Main():
         else:
             self.evo_start_button.enable()
 
-    def on_dropdown_pick_algo_config_changed(self, event: pygame.Event):
+    def on_dropdown_pick_algo_config_changed(self, event: pygame.event.Event):
         if event.text == "from file":
             self.dropdown_pick_result.disable()
         else:
@@ -722,7 +720,7 @@ class Main():
                 self.ui_container_live_config.kill()
                 self.create_live_param_ui_elements()
 
-    def on_dropdown_moving_selection_changed(self, event: pygame.Event):
+    def on_dropdown_moving_selection_changed(self, event: pygame.event.Event):
         if event.text == "from file":
             self.moving_users = {}
         else:
@@ -730,7 +728,7 @@ class Main():
                 # Reading from json file
                 self.moving_users = json.load(openfile)
 
-    def on_dropdown_pick_result_changed(self, event: pygame.Event):
+    def on_dropdown_pick_result_changed(self, event: pygame.event.Event):
         # Opening json file
         if event.text != "from file":
             self.son.load_graph_from_json_adjacency_file(
@@ -739,7 +737,7 @@ class Main():
         self.update_network_info_lables()
         # TODO disable some other elements ?
 
-    def on_dropdown_mode_changed(self, event: pygame.Event):
+    def on_dropdown_mode_changed(self, event: pygame.event.Event):
 
         self.running_mode = event.text
 
@@ -1075,7 +1073,7 @@ class Main():
                 container=self.ui_container,
             )
 
-    def on_dropdown_canvas_action_changed(self, event: pygame.Event):
+    def on_dropdown_canvas_action_changed(self, event: pygame.event.Event):
         self.right_mouse_action = event.text
         if event.text == "remove" or event.text == "cell":
             self.apply_button.disable()
@@ -1318,7 +1316,7 @@ class Main():
             self.start_evo()
         else:
             # kill process when finished
-            if self.auto_mode:
+            if self.script_mode:
                 self.iterations = 0
                 quit()
             else:
@@ -1417,7 +1415,7 @@ class Main():
             # set time per tick
             dt = self.clock.tick(30)/1000
 
-            if self.auto_mode:
+            if self.script_mode:
                 # start evo
                 if self.iterations == -1:
                     self.start_evo()
@@ -1598,7 +1596,7 @@ if __name__ == "__main__":
         network_name = sys.argv[1]
         config_name = sys.argv[2]
         son = Son()
-        main = Main(son, auto_mode=True, network_name=network_name, config_name=config_name)
+        main = Main(son, script_mode=True, network_name=network_name, config_name=config_name)
         main.run()
     else:
         son = Son()
