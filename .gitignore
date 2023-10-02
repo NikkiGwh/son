@@ -2,5 +2,4 @@ __pycache__/*
 .ipynb_checkpoints/*
 testing.py
 *.DS_Store
-datastore/*
 

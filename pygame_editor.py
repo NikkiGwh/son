@@ -87,10 +87,9 @@ def get_network_folder_names() -> list[str]:
 
 
 class Main():
-    def __init__(self, graph: Son, ui_mode=True, network_name="", config_name="") -> None:
+    def __init__(self, graph: Son, auto_mode=False, network_name="", config_name="") -> None:
         pygame.init()
-        self.highest_rssi = 0
-        self.lowest_rssi = 1000
+        self.auto_mode = auto_mode
         self.running_mode = RunningMode.LIVE.value
         self.finished = False
         self.moving_speed_in_m_per_second = 0
@@ -156,6 +155,27 @@ class Main():
         # live config elements
         self.create_live_param_ui_elements()
         self.ui_container_live_config.disable()
+
+        # auto mode
+        if auto_mode:
+            # load network
+            self.dropdown_menu_pick_network.selected_option = network_name
+            self.input_algo_config_name.set_text(config_name)
+
+            event: pygame.Event = pygame.Event(0)
+            event.text = network_name
+            self.on_dropdown_pick_network_changed(event)
+
+            # load param config
+            with open("predefined_configs/" + config_name + ".json", 'r', encoding="utf-8") as openfile:
+                # Reading params from json file
+                self.config_params = json.load(openfile)
+                # apply network params
+                self.apply_network_params_from_param_dic()
+
+            # start programm -> in running_method
+            self.iterations = -1
+            # terminate all processes -> in optimization_finished
 
     def disable_ui(self):
         self.ui_container.disable()
@@ -1157,9 +1177,8 @@ class Main():
                         visible=True)
                     return
 
-            self.current_save_result_directory = "datastore/" + self.dropdown_menu_pick_network.selected_option + "/moving_selections/"
             # save current selection
-            with open(self.current_save_result_directory + name + ".json", "w+", encoding="utf-8") as outfile:
+            with open(self.current_save_result_directory + "/moving_selections/" + name + ".json", "w+", encoding="utf-8") as outfile:
                 json.dump(self.moving_users, outfile)
 
             # update moving_selections dropdown
@@ -1188,10 +1207,11 @@ class Main():
             return
 
         if os.path.exists("datastore/" + self.dropdown_menu_pick_network.selected_option):
-
+            network_confg_name = self.input_algo_config_name.get_text()
+            if self.iterations == - 1:
+                self.iterations = 0
             if self.iterations == 0:
                 # create new config folder
-                network_confg_name = self.input_algo_config_name.get_text()
                 # get all alread used config names
 
                 directory_contents = os.listdir(
@@ -1213,10 +1233,9 @@ class Main():
                     "datastore/" + self.dropdown_menu_pick_network.selected_option + "/" +
                     network_confg_name)
 
-                self.current_save_result_directory = "datastore/" + self.dropdown_menu_pick_network.selected_option + \
-                    "/" + network_confg_name
+                self.current_save_result_directory = "datastore/" + self.dropdown_menu_pick_network.selected_option
                 # save current algorithm config
-                with open(self.current_save_result_directory + "/" + network_confg_name + ".json", "w+", encoding="utf-8") as outfile:
+                with open(self.current_save_result_directory + "/" + network_confg_name + "/" + network_confg_name + ".json", "w+", encoding="utf-8") as outfile:
                     json.dump(self.config_params, outfile)
 
             # start optimization
@@ -1233,7 +1252,7 @@ class Main():
                     self.config_params["objectives"],
                     self.config_params["algorithm"],
                     self.son,
-                    self.current_save_result_directory + "/",
+                    self.current_save_result_directory + "/" + network_confg_name + "/",
                     self.pymoo_message_queue,
                     self.editor_message_queue,
                     self.running_mode,
@@ -1266,7 +1285,8 @@ class Main():
 
             json_data = json.dumps(self.objective_history)
             # Save objective JSON data to a file
-            file_path = f"{self.current_save_result_directory}/objectives_result_{self.iterations}.json"
+            config_name = self.input_algo_config_name.get_text()
+            file_path = f"{self.current_save_result_directory}/{config_name}/objectives_result_{self.iterations}.json"
             with open(file_path, 'w', encoding="utf-8") as file:
                 file.write(json_data)
 
@@ -1297,7 +1317,12 @@ class Main():
         if self.iterations < self.config_params["iterations"]:
             self.start_evo()
         else:
-            self.iterations = 0
+            # kill process when finished
+            if self.auto_mode:
+                self.iterations = 0
+                quit()
+            else:
+                self.iterations = 0
 
     def save_current_network(self):
 
@@ -1391,6 +1416,11 @@ class Main():
         while True:
             # set time per tick
             dt = self.clock.tick(30)/1000
+
+            if self.auto_mode:
+                # start evo
+                if self.iterations == -1:
+                    self.start_evo()
 
             if self.running_mode == RunningMode.LIVE.value and self.optimization_running:
                 self.dt_since_last_history_update += dt
@@ -1565,12 +1595,11 @@ class Main():
 if __name__ == "__main__":
 
     if len(sys.argv) > 1:
-
+        network_name = sys.argv[1]
+        config_name = sys.argv[2]
         son = Son()
-        main = Main(son)
+        main = Main(son, auto_mode=True, network_name=network_name, config_name=config_name)
         main.run()
-
-        print(sys.argv)
     else:
         son = Son()
         main = Main(son)
