@@ -83,22 +83,29 @@ dependencies:
   - pip:
       - about-time==4.2.1
       - alive-progress==3.1.4
+      - attrs==23.1.0
       - autograd==1.6.2
       - cma==3.2.2
       - contourpy==1.1.1
       - cycler==0.12.0
       - deprecated==1.2.14
       - dill==0.3.7
+      - fastjsonschema==2.18.1
       - fonttools==4.43.0
       - future==0.18.3
       - grapheme==0.6.0
+      - jsonschema==4.19.1
+      - jsonschema-specifications==2023.7.1
       - kiwisolver==1.4.5
       - matplotlib==3.8.0
+      - nbformat==5.9.2
       - pillow==10.0.1
       - pygame-ce==2.3.2
       - pygame-gui==0.6.9
       - pymoo==0.6.0.1
       - pyparsing==3.1.1
       - python-i18n==0.3.9
+      - referencing==0.30.2
+      - rpds-py==0.10.3
       - wrapt==1.15.0
 prefix: /Users/niklaskluge/anaconda3/envs/son-simulation-conda-env
