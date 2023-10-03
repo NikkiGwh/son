@@ -99,6 +99,7 @@ class Main():
         self.optimization_running = False
         self.dt_since_last_activation_profile_fetch = 0
         self.n_gen_since_last_fetch = 0
+        self.ngen_total = 0
         self.dt_since_last_evo_reset = 0
         self.objective_history = []
         self.ngen_since_last_evo_reset = 0
@@ -407,16 +408,17 @@ class Main():
         # current_energy_efficiency = self.son.get_total_energy_consumption()
         current_avg_dl_datarate = self.son.get_average_dl_datarate()
         current_avg_user_degree = self.son.get_average_userNode_degree()
+
         self.objective_history.append(
             (round(self.running_time_in_s, 2),
-             self.running_ticks, current_energy_efficiency, current_avg_dl_datarate, current_avg_user_degree))
+             self.running_ticks, current_energy_efficiency, current_avg_dl_datarate, current_avg_user_degree, self.ngen_total))
 
         self.dt_since_last_history_update = 0
         self.ticks_since_last_history_update = 0
 
     def trigger_evo_reset_invalid_activation_profile(self):
         # invoke evo_reset if threshhold is met
-        if self.ngen_since_last_evo_reset == self.config_params["reset_rate_in_ngen"]-2:
+        if self.ngen_since_last_evo_reset == self.config_params["reset_rate_in_ngen"]-1:
 
             # check if current activation profile is valid
             # or someone has moved since last call
@@ -1342,6 +1344,8 @@ class Main():
         self.ngen_since_last_evo_reset = 0
         self.running_time_in_s = 0
         self.running_ticks = 0
+        self.n_gen_since_last_fetch = 0
+        self.ngen_total = 0
         # reset moving users vecors from file:
         self.reload_current_moving_selection()
         self.finished = False
@@ -1391,6 +1395,7 @@ class Main():
                         self.queue_flags["n_gen_since_last_fetch"] = callback_obj["n_gen_since_last_fetch"]
 
                         self.queue_flags["n_gen"] = callback_obj["n_gen"]
+                        self.ngen_total = callback_obj["n_gen"]
 
                         self.queue_flags["n_gen_since_last_reset"] = callback_obj["n_gen_since_last_reset"]
 

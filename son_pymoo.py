@@ -499,7 +499,8 @@ def start_optimization(
                           running_mode=running_mode))
 
     if running_mode == RunningMode.LIVE.value:
-        total_gen = result.algorithm.n_gen
+        # total_gen = result.algorithm.n_gen
+        total_gen = 0
         while result.algorithm.callback.data["external_reset"] and result.algorithm.callback.data["external_termination"] == False:
 
             # create design_space_pop with old son object -> otherwise conversion is wrong,
@@ -552,18 +553,18 @@ def start_optimization(
                     running_mode=running_mode, total_gen=total_gen))
 
         # TODO look if the selection actually picks the solution from pareto front !!! does it use the right son object ?
-        activation_dict = select_solution(
-            son_obj,
-            decision_space=result.X,
-            objective_space=result.F)
-        pymoo_message_queue.put(
-            {"activation_dict": activation_dict,
-             "objective_space": result.F,
-             "finished": False,
-             "n_gen_since_last_fetch": 0,
-             "n_gen_since_last_reset": 0,
-             "n_gen": n_generations
-             })
+        # activation_dict = select_solution(
+        #     son_obj,
+        #     decision_space=result.X,
+        #     objective_space=result.F)
+        # pymoo_message_queue.put(
+        #     {"activation_dict": activation_dict,
+        #      "objective_space": result.F,
+        #      "finished": False,
+        #      "n_gen_since_last_fetch": 0,
+        #      "n_gen_since_last_reset": 0,
+        #      "n_gen": total_gen + result.algorithm.n_gen
+        #      })
 
     designSpace = convert_decision_Space_pop_to_design_space_pop(son_obj, result.X, repair=False)
     objectiveSpace = result.F
