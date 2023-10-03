@@ -4,6 +4,8 @@ A mobile Network simulation
 
 - [Documentation](https://www.youtube.com/watch?v=VQyViaC_QOg&ab_channel=OzzyManReviews)
 
+![topologyimage](topologyimage.png)
+
 ## Requirements
 
 - Python 3.9+
