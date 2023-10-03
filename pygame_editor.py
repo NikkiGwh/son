@@ -412,7 +412,7 @@ class Main():
 
     def trigger_evo_reset_invalid_activation_profile(self):
         # invoke evo_reset if threshhold is met
-        if self.ngen_since_last_evo_reset >= self.config_params["reset_rate_in_ngen"]-1:
+        if self.ngen_since_last_evo_reset == self.config_params["reset_rate_in_ngen"]-2:
 
             # check if current activation profile is valid
             # or someone has moved since last call
