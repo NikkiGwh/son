@@ -15,6 +15,7 @@
   "running_time_in_s": 30.0,
   "iterations": 2,
   "greedy_to_moving": false,
+  "use_greedy_assign": false,
   "moving_selection_name": "70percent",
   "macro": {
     "type": "macro",

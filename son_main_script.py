@@ -650,6 +650,12 @@ class Son:
             count += 1
 
         return dl_datarate_sum/count
+    
+    def get_average_userNode_degree(self):
+        return len(self.graph.edges)/len(list(filter(self.filter_user_nodes, self.graph.nodes.data())))
+    
+    def get_total_UserNode_edges(self):
+        return len(self.graph.edges) / 2
 
     ################################ greedy assingment methods ################################
 
@@ -746,12 +752,12 @@ class Son:
 
     def apply_activation_dict(
             self, activation_dict: dict[str, str],
-            update_network_attributes=True, min_rssi=-1.0, greedy_assign_list=[]):
+            update_network_attributes=True, greedy_assign_list=[]):
         """takes activation dict  and applies it on network accordingly
         and also repairs encoding if there are any violations against the current topology
 
         Args:
-            encoding (list[int]): activation list of cell edges
+            encoding (dict[str, str]]): activation dict of cell-name to connected bs-name
         returns:
             repaired activation encoding
         """
@@ -770,19 +776,6 @@ class Son:
 
         if update_network_attributes:
             self.update_network_attributes()
-
-            if min_rssi != -1:
-                changed = False
-                for _, cell_node in enumerate(
-                        list(filter(lambda x: x[1]["type"] == "cell", self.graph.nodes.data()))):
-                    if cell_node[1]["rssi"] < min_rssi:
-                        # find better rssi
-                        greedy_bs_id = self.greedy_assign_user_to_bs(
-                            cell_node[0], set_edge_activation=True)
-                        activation_dict[cell_node[0]] = greedy_bs_id
-                        changed = True
-                if changed:
-                    self.update_network_attributes()
 
         # return repaired activation encoding
         return activation_dict

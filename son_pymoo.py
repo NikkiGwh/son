@@ -22,6 +22,7 @@ from pymoo.core.callback import Callback
 from pymoo.operators.crossover.ux import UniformCrossover
 from pymoo.operators.crossover.pntx import SinglePointCrossover
 from pymoo.termination import get_termination
+from pymoo.core.termination import Termination
 import networkx as nx
 
 
@@ -292,7 +293,20 @@ class SonDublicateElimination(ElementwiseDuplicateElimination):
     def is_equal(self, a, b):
         return np.array_equal(a, b)
 
+class MyNoTermination(Termination):
+    def __init__(self) -> None:
+        super().__init__()
 
+        # the algorithm can be forced to terminate by setting this attribute to true
+        self.force_termination_niklas = False
+
+    def has_terminated(self):
+        return self.force_termination_niklas
+    
+    def terminate(self):
+        self.force_termination_niklas = True
+    def _update(self, algorithm):
+        return 0.0
 class MyCallback(Callback):
 
     def __init__(self, pymoo_message_queue: multiprocessing.Queue,
@@ -473,7 +487,8 @@ def start_optimization(
 
     # build termination criterias
 
-    termination_obj = get_termination("n_gen", n_generations)
+    # termination_obj = get_termination("n_gen", n_generations)
+    termination_obj = MyNoTermination()
     # start computatoin with  termination criteria
 
     result = minimize(sonProblem, pymooAlgorithm, termination=termination_obj, seed=seed,

@@ -58,5 +58,12 @@
     "colours": {
       "dark_bg": "#111b45"
     }
+  },
+  "toggle": {
+    "colours": {
+      "normal_bg": "#520e07",
+      "hovered_bg": "#80240e",
+      "selected_bg": "#3c5b08"
+    }
   }
 }
