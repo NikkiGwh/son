@@ -328,79 +328,44 @@ class MyCallback(Callback):
     def notify(self, algorithm: GeneticAlgorithm):
         queue_filled = False
         if self.running_mode == RunningMode.LIVE.value:
+            # update counter
             self.n_gen_since_last_fetch += 1
             self.n_gen_since_last_reset += 1
+            
             # read editor message queue
             while self.editor_message_queue.empty() is False:
                 queue_obj = self.editor_message_queue.get()
 
                 if queue_obj["terminate"] == True:
-
                     ##### react to terminate #####
-                    queue_filled = True  # -> will be filled in main loop of optimize method
                     self.data["external_termination"] = True
                     algorithm.termination.terminate()
                 elif queue_obj["reset"] == True and queue_obj["graph"] is not False:
                     ##### react to reset #####
-
-                    queue_filled = True
                     self.data["external_reset"] = True
                     self.data["graph"] = queue_obj["graph"]
-                    # TODO loo if the selection actually picks the solution from pareto front !!!
-                    activation_dict = select_solution(
-                        self.son,
-                        decision_space=algorithm.pop.get("X"),
-                        objective_space=algorithm.pop.get("F"))
-
-                    self.pymoo_message_queue.put(
-                        {"activation_dict": activation_dict,
-                         "objective_space": algorithm.pop.get("F"),
-                         "finished": False,
-                         "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
-                         "n_gen_since_last_reset": 0,
-                         "n_gen": algorithm.n_gen + self.total_gen
-                         })
+                    self.n_gen_since_last_reset
                     algorithm.termination.terminate()
-                else:
-                    ##### react to other cases #####
-                    queue_filled = True
-                    # TODO loo if the selection actually picks the solution from pareto front !!!
-                    activation_dict = select_solution(
-                        self.son,
-                        decision_space=algorithm.pop.get("X"),
-                        objective_space=algorithm.pop.get("F"))
-                    self.n_gen_since_last_fetch = 0
 
-                    self.pymoo_message_queue.put(
-                        {"activation_dict": activation_dict,
-                         "objective_space": algorithm.pop.get("F"),
-                         "finished": False,
-                         "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
-                         "n_gen_since_last_reset": self.n_gen_since_last_reset,
-                         "n_gen": algorithm.n_gen + self.total_gen
-                         })
 
             ####### normal result propagation after ######
-            if queue_filled is False:
 
-                # TODO loo if the selection actually picks the solution from pareto front !!!
-                activation_dict = select_solution(
-                    self.son,
-                    decision_space=algorithm.pop.get("X"),
-                    objective_space=algorithm.pop.get("F"))
-                self.n_gen_since_last_fetch = 0
-                self.pymoo_message_queue.put(
-                    {"activation_dict": activation_dict,
-                        "objective_space": algorithm.pop.get("F"),
-                        "finished": False,
-                        "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
-                        "n_gen_since_last_reset": self.n_gen_since_last_reset,
-                        "n_gen": algorithm.n_gen + self.total_gen
-                     })
+            # TODO loo if the selection actually picks the solution from pareto front !!!
+            activation_dict = select_solution(
+                self.son,
+                decision_space=algorithm.pop.get("X"),
+                objective_space=algorithm.pop.get("F"))
+            self.n_gen_since_last_fetch = 0
+            self.pymoo_message_queue.put(
+                {"activation_dict": activation_dict,
+                    "objective_space": algorithm.pop.get("F"),
+                    "finished": False,
+                    "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
+                    "n_gen_since_last_reset": self.n_gen_since_last_reset,
+                    "n_gen": algorithm.n_gen + self.total_gen
+                    })
 
 ################################ main ###################
-# TODO take SOn as arguemtn away and replace with dicts, graph or even array
-
 
 def start_optimization(
         pop_size: int,
@@ -486,10 +451,11 @@ def start_optimization(
     sonProblem = SonProblemElementWise(obj_dict=objectives, son=son_obj)
 
     # build termination criterias
+    if running_mode == RunningMode.STATIC.value:
+        termination_obj = get_termination("n_gen", n_generations)
+    else:
+        termination_obj = MyNoTermination()
 
-    # termination_obj = get_termination("n_gen", n_generations)
-    termination_obj = MyNoTermination()
-    # start computatoin with  termination criteria
 
     result = minimize(sonProblem, pymooAlgorithm, termination=termination_obj, seed=seed,
                       verbose=verbose, save_history=history,
@@ -542,7 +508,7 @@ def start_optimization(
                                        eliminate_duplicates=eliminate_duplicates,
                                        n_generations=n_generations)
 
-            total_gen += result.algorithm.n_gen
+            total_gen += result.algorithm.n_gen-1
             result = minimize(
                 sonProblem, pymooAlgorithm, termination=termination_obj, seed=seed,
                 verbose=verbose, save_history=history,
@@ -553,26 +519,25 @@ def start_optimization(
                     running_mode=running_mode, total_gen=total_gen))
 
         # TODO look if the selection actually picks the solution from pareto front !!! does it use the right son object ?
-        # activation_dict = select_solution(
-        #     son_obj,
-        #     decision_space=result.X,
-        #     objective_space=result.F)
-        # pymoo_message_queue.put(
-        #     {"activation_dict": activation_dict,
-        #      "objective_space": result.F,
-        #      "finished": False,
-        #      "n_gen_since_last_fetch": 0,
-        #      "n_gen_since_last_reset": 0,
-        #      "n_gen": total_gen + result.algorithm.n_gen
-        #      })
-
-    designSpace = convert_decision_Space_pop_to_design_space_pop(son_obj, result.X, repair=False)
-    objectiveSpace = result.F
-    exec_time = result.exec_time
-    print("------- execution time in ms ------")
-    print(exec_time)
+        activation_dict = select_solution(
+            son_obj,
+            decision_space=result.X,
+            objective_space=result.F)
+        pymoo_message_queue.put(
+            {"activation_dict": activation_dict,
+             "objective_space": result.F,
+             "finished": False,
+             "n_gen_since_last_fetch": 0,
+             "n_gen_since_last_reset": 0,
+             "n_gen": total_gen + result.algorithm.n_gen-1
+             })
 
     if running_mode == RunningMode.STATIC.value:
+        designSpace = convert_decision_Space_pop_to_design_space_pop(son_obj, result.X, repair=False)
+        objectiveSpace = result.F
+        exec_time = result.exec_time
+        print("------- staic execution time in ms ------")
+        print(exec_time)
         n_evals_list = []        # corresponding number of function evaluations\
         hist_F = []              # the objective space values in each generation
         hist_cv = []             # constraint violation in each generation
@@ -635,7 +600,7 @@ def start_optimization(
                              "finished": True,
                              "n_gen_since_last_fetch": 0,
                              "n_gen_since_last_reset": 0,
-                             "n_gen": n_generations
+                             "n_gen": -1
                              })
 
 

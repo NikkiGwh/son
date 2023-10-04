@@ -133,7 +133,7 @@ class Main():
         # GUI
         self.manager = pygame_gui.UIManager((WINDOW_WIDTH, WINDOW_HEIGHT), './theme.json')
         self.popup = CustomConfirmationDialog(
-            rect=pygame.Rect(GAME_WIDTH + 20, 20, 100, 100),
+            rect=pygame.Rect(GAME_WIDTH + 20, 20, 260, 200),
             blocking=True,
             manager=self.manager,
             window_title="network already exist",
@@ -311,7 +311,7 @@ class Main():
         if len(user_nodes) <= 0:
             self.popup.kill()
             self.popup = CustomConfirmationDialog(
-                rect=pygame.Rect(GAME_WIDTH + 20, 20, 100, 100),
+                rect=pygame.Rect(GAME_WIDTH + 20, 20, 260, 200),
                 blocking=True,
                 manager=self.manager,
                 window_title="No users",
@@ -1110,7 +1110,7 @@ class Main():
         if name == "":
             self.popup.kill()
             self.popup = CustomConfirmationDialog(
-                rect=pygame.Rect(GAME_WIDTH + 20, 20, 100, 100),
+                rect=pygame.Rect(GAME_WIDTH + 20, 20, 260, 200),
                 blocking=True,
                 manager=self.manager,
                 window_title="Missing file name",
@@ -1122,7 +1122,7 @@ class Main():
         if not bool(self.moving_users):
             self.popup.kill()
             self.popup = CustomConfirmationDialog(
-                rect=pygame.Rect(GAME_WIDTH + 20, 20, 100, 100),
+                rect=pygame.Rect(GAME_WIDTH + 20, 20, 260, 200),
                 blocking=True,
                 manager=self.manager,
                 window_title="Missing user selection",
@@ -1141,7 +1141,7 @@ class Main():
                 if name + ".json" == item:
                     self.popup.kill()
                     self.popup = CustomConfirmationDialog(
-                        rect=pygame.Rect(GAME_WIDTH + 20, 20, 100, 100),
+                        rect=pygame.Rect(GAME_WIDTH + 20, 20, 260, 200),
                         blocking=True,
                         manager=self.manager,
                         window_title="file already exists ",
@@ -1170,7 +1170,7 @@ class Main():
         if self.running_mode == RunningMode.LIVE.value and self.dropdown_moving_selection.selected_option == "from file":
             self.popup.kill()
             self.popup = CustomConfirmationDialog(
-                rect=pygame.Rect(GAME_WIDTH + 20, 20, 100, 100),
+                rect=pygame.Rect(GAME_WIDTH + 20, 20, 260, 200),
                 blocking=True,
                 manager=self.manager,
                 window_title="missing selection name",
@@ -1196,7 +1196,7 @@ class Main():
                 if network_confg_name == "" or network_confg_name in directory_contents:
                     self.popup.kill()
                     self.popup = CustomConfirmationDialog(
-                        rect=pygame.Rect(GAME_WIDTH + 20, 20, 100, 100),
+                        rect=pygame.Rect(GAME_WIDTH + 20, 20, 260, 200),
                         blocking=True,
                         manager=self.manager,
                         window_title="config name invalid",
@@ -1244,7 +1244,7 @@ class Main():
         else:
             self.popup.kill()
             self.popup = CustomConfirmationDialog(
-                rect=pygame.Rect(GAME_WIDTH + 20, 20, 100, 100),
+                rect=pygame.Rect(GAME_WIDTH + 20, 20, 260, 200),
                 blocking=True,
                 manager=self.manager,
                 window_title="Missing network file",
@@ -1290,7 +1290,7 @@ class Main():
         if network_name == "" or network_name == None:
             self.popup.kill()
             self.popup = CustomConfirmationDialog(
-                rect=pygame.Rect(GAME_WIDTH + 20, 20, 100, 100),
+                rect=pygame.Rect(GAME_WIDTH + 20, 20, 260, 200),
                 blocking=True,
                 manager=self.manager,
                 window_title="Missing file name",
@@ -1302,7 +1302,7 @@ class Main():
         if network_name in get_network_folder_names():
             self.popup.kill()
             self.popup = CustomConfirmationDialog(
-                rect=pygame.Rect(GAME_WIDTH + 20, 20, 100, 100),
+                rect=pygame.Rect(GAME_WIDTH + 20, 20, 260, 200),
                 blocking=True,
                 manager=self.manager,
                 window_title="file name already exists",
@@ -1411,7 +1411,6 @@ class Main():
                     self.ngen_since_last_evo_reset = self.queue_flags["n_gen_since_last_reset"]
 
                     if self.ticks_since_last_history_update >= 30 and self.running_ticks <= self.config_params["running_time_in_s"] * 30:
-
                         self.update_objective_history()
 
                     # move users
