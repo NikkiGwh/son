@@ -45,6 +45,7 @@ class Network_Simulation_State():
     def __init__(self, graph: Son, script_mode=False, network_name="", config_name="", fps = 30) -> None:
         self.script_mode = script_mode
         self.fps = fps
+        self.optimization_process = multiprocessing.Process()
         self.config_params = default_algorithm_param_config
         self.running_mode = RunningMode.LIVE.value
         self.finished = False
@@ -448,7 +449,7 @@ class Network_Simulation_State():
         
         # start optimization
         if not self.config_params["use_greedy_assign"]:
-            optimization_process = multiprocessing.Process(target=start_optimization, args=(
+            self.optimization_process = multiprocessing.Process(target=start_optimization, args=(
                 int(self.config_params["pop_size"]),
                 int(self.config_params["n_offsprings"]),
                 int(self.config_params["n_generations"]),
@@ -467,7 +468,7 @@ class Network_Simulation_State():
                 0.3,
                 0.3
             ))
-            optimization_process.start()
+            self.optimization_process.start()
 
         self.optimization_running = True
         
@@ -477,13 +478,16 @@ class Network_Simulation_State():
         self.optimization_running = False
         self.iterations += 1
         if self.running_mode == RunningMode.LIVE.value:
+            # self.optimization_process.terminate()
+            # self.optimization_process.join()
+            # self.optimization_process.close()
             self.save_objective_history_to_file()
 
         print("finished " + str(self.iterations) + " iteraiton")
                   
         self.reset_all_after_run()
         if self.iterations < self.config_params["iterations"]:
-            self.start_evo(new_config_name=self.current_config_name)
+            self.start_evo(self.current_config_name)
         else:
             if not self.script_mode:
                 self.iterations = 0
