@@ -35,12 +35,12 @@ python pygame_editor.py
 
 ## example for running predefined experiments via script arguments
 
-pygame [network-name] [configuration-name]
+python network_simulation_script.py [network-name] [configuration-name]
 
 ```
-python pygame_editor.py hetNet2 hetNet2_predefined_70_greedy
+python network_simulation_script.py hetNet2 hetNet2_predefined_70_greedy
 ```
 
 predefined configurations (i.e. hetNet2_predefined_70_greedy.json) are located in the ./predefined_configs directory
 
-You can only choose network names which are already have a directory (i.e. hetNet2)
+You can only choose network names which already have a directory (i.e. hetNet2)
