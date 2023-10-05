@@ -39,46 +39,46 @@ class NodeType(Enum):
 
 
 default_node_params = {
-    "macro": {
-        "type": "macro",
-        "tx_power": 31.622776601683793,
-        "static_power": 4.0,
-        "standby_power": 2.0,
-        "antennas": 8,
-        "frequency": 6.0,
-        "wave_length": 0.04996540966666666,
-        "channel_bandwidth": 10
-    },
-    "micro": {
-        "type": "micro",
-        "tx_power": 3.162277660168379,
-        "static_power": 1.5,
-        "standby_power": 0.75,
-        "antennas": 3,
-        "frequency": 16,
-        "wave_length": 0.018737028625,
-        "channel_bandwidth": 10
-    },
-    "femto": {
-        "type": "femto",
-        "tx_power": 0.1,
-        "static_power": 4.0,
-        "standby_power": 0,
-        "antennas": 4,
-        "frequency": 100,
-        "wave_length": 0.00299792,
-        "channel_bandwidth": 10
-    },
-    "pico": {
-        "type": "pico",
-        "tx_power": 0.25118864315095796,
-        "static_power": 4.0,
-        "standby_power": 0,
-        "antennas": 4,
-        "frequency": 100,
-        "wave_length": 0.00299792,
-        "channel_bandwidth": 10
-    },
+   "macro": {
+    "type": "macro",
+    "tx_power": 31.622776601683793,
+    "static_power": 4.0,
+    "standby_power": 2.0,
+    "antennas": 8,
+    "frequency": 13.0,
+    "wave_length": 0.02306095830769231,
+    "channel_bandwidth": 10
+  },
+  "micro": {
+    "type": "micro",
+    "tx_power": 3.162277660168379,
+    "static_power": 1.5,
+    "standby_power": 0.75,
+    "antennas": 3,
+    "frequency": 10.0,
+    "wave_length": 0.029979245800000002,
+    "channel_bandwidth": 10
+  },
+  "femto": {
+    "type": "femto",
+    "tx_power": 0.1,
+    "static_power": 4.0,
+    "standby_power": 0,
+    "antennas": 4,
+    "frequency": 100,
+    "wave_length": 0.00299792,
+    "channel_bandwidth": 10
+  },
+  "pico": {
+    "type": "pico",
+    "tx_power": 0.25118864315095796,
+    "static_power": 4.0,
+    "standby_power": 0,
+    "antennas": 4,
+    "frequency": 100,
+    "wave_length": 0.00299792,
+    "channel_bandwidth": 10
+  },
     "cell": {
         "type": "cell",
         "shadow_component": 0,
@@ -223,7 +223,9 @@ class Son:
     ###################### network update methods ###################
 
     def update_network_attributes(self):
-        """update all dynamic node and edge attributes in the right order"""
+        """ update all dynamic node and edge attributes in the right order
+            important !! before that you have set activations for the edges 
+        """
         self.update_user_node_attributes()
         self.update_bs_node_attributes()
         self.update_user_node_dl_datarate()
@@ -446,19 +448,19 @@ class Son:
 
         # calculate interfering signals for cell_id
         # only bs nodes in range of cell have edge -> so no filtering required
-        interference_signal = 0
-
+        # only bs nodes which transmitt at same frequency (same type) interfer each others signal
+        
         # calculate received signal power from active edge
         connected_bs_id = self.get_connected_bs_nodeid(cell_id)
         if connected_bs_id is None:
             return 0
-
+        interference_signal = 0
         for _, bs_in_range_id in enumerate(self.graph[cell_id]):
-
-            for _, interfering_cell_id in enumerate(self.graph[bs_in_range_id]):
-                if self.graph[interfering_cell_id][bs_in_range_id]["active"] and interfering_cell_id != cell_id:
-                    interference_signal += self.get_rssi_cell(
-                        cell_id, (interfering_cell_id, bs_in_range_id))
+            if self.graph.nodes[bs_in_range_id]["type"] == self.graph.nodes[connected_bs_id]["type"]:
+                for _, interfering_cell_id in enumerate(self.graph[bs_in_range_id]):
+                    if self.graph[interfering_cell_id][bs_in_range_id]["active"] and interfering_cell_id != cell_id:
+                        interference_signal += self.get_rssi_cell(
+                            cell_id, (interfering_cell_id, bs_in_range_id))
 
         received_signal_power = self.get_rssi_cell(cell_id, (cell_id, connected_bs_id))
         return received_signal_power / (interference_signal + received_signal_power)
@@ -755,6 +757,7 @@ class Son:
             update_network_attributes=True, greedy_assign_list=[]):
         """takes activation dict  and applies it on network accordingly
         and also repairs encoding if there are any violations against the current topology
+        important !! first assign activations to edges, thatn update_network_attributes()
 
         Args:
             encoding (dict[str, str]]): activation dict of cell-name to connected bs-name
