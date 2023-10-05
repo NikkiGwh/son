@@ -10,4 +10,4 @@ From: python:3.11
     pip install -r pip-requirements.txt
 
 %runscript
-    python pygame_editor.py hetNet2 hetNet2_predefined_70_greedy
+    python network_simulation_script.py hetNet2 hetNet2_predefined_70_greedy
