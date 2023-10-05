@@ -44,3 +44,15 @@ python network_simulation_script.py hetNet2 hetNet2_predefined_70_greedy
 predefined configurations (i.e. hetNet2_predefined_70_greedy.json) are located in the ./predefined_configs directory
 
 You can only choose network names which already have a directory (i.e. hetNet2)
+
+## Run the software on the cluster
+
+- Get your code onto the cluster
+- Use the following to build the image (the .def file contains the container definition)
+```
+apptainer build nns.sif nns.def
+```
+- Use the `slurm_job.sh` to run the container on the cluster with the following command from the directory containing the code
+```
+sbatch slurm_job.sh
+```
