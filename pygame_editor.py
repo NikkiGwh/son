@@ -41,6 +41,8 @@ text_input_integer_number_type_characters = ["1", "2", "3", "4", "5", "6", "7", 
 class Editor():
     def __init__(self, net_sim: Network_Simulation_State) -> None:
         pygame.init()
+        self.gui_ticks = 0
+        self.gui_fps = 30
         self.selected_node_id = None
         self.show_moving_users = False
         self.right_mouse_action = dropdown_menue_options_list[0]
@@ -49,7 +51,8 @@ class Editor():
         self.background.fill(pygame.colordict.THECOLORS["white"])
         self.clock = pygame.time.Clock()
         self.net_sim = net_sim
-        self.fps = 30
+        self.net_sim.AddSubscribersForFinishedEvent(self.on_optimization_finished_callback)
+        self.one_fps_sim_mode = False
 
         # networkx 1 = 1m I want max 10 km -> 0.1 on screen equals 1 m
         self.unit_size_x, self.unit_size_y = (
@@ -258,6 +261,11 @@ class Editor():
 
         self.show_moving_selection_toggle.select() if self.show_moving_users else self.show_moving_selection_toggle.unselect()
 
+    def onpress_fps_toggle(self):
+        self.one_fps_sim_mode = not self.one_fps_sim_mode
+        self.net_sim.fps = 1 if self.one_fps_sim_mode else self.gui_fps
+        self.sim_fps_toggle.select() if self.one_fps_sim_mode else self.sim_fps_toggle.unselect()
+
     def apply_current_network_params_to_ui_and_graph(self):
         # apply params on network
         self.net_sim.apply_current_network_params_to_graph()
@@ -298,9 +306,6 @@ class Editor():
             self.net_sim.config_params[self.right_mouse_action]["static_power"] = float(event.text)
         if event.ui_element == self.input_n_generations:
             self.net_sim.config_params["n_generations"] = float(event.text)
-        if event.ui_element == self.input_fps:
-            self.fps = int(event.text)
-            self.net_sim.fps = int(event.text)
         if event.ui_element == self.input_n_offsprings:
             self.net_sim.config_params["n_offsprings"] = float(event.text)
         if event.ui_element == self.input_pop_size:
@@ -691,10 +696,10 @@ class Editor():
             manager=self.manager, container=self.ui_container)
         self.evo_stop_button.disable()
         
-        self.input_fps = pygame_gui.elements.UITextEntryLine(
-            container=self.ui_container, relative_rect=pygame.Rect((100, 590), (50, 30)),
-            manager=self.manager, placeholder_text="fps", initial_text= str(self.fps))
-        self.input_fps.set_allowed_characters(text_input_integer_number_type_characters)
+        self.sim_fps_toggle = pygame_gui.elements.UIButton(
+            container=self.ui_container, relative_rect=pygame.Rect((100, 590), (-1, 30)),
+            manager=self.manager, text="1-fps-mode", object_id="toggle")
+        self.sim_fps_toggle.select() if self.one_fps_sim_mode else self.sim_fps_toggle.unselect()
 
         self.dropdown_pick_running_mode = pygame_gui.elements.UIDropDownMenu(
             options_list=[item.value for item in RunningMode],
@@ -879,8 +884,9 @@ class Editor():
         self.disable_ui()
         self.evo_stop_button.enable()
 
-    def on_optimization_finished_update_ui(self):
+    def on_optimization_finished_callback(self, message: str):
         # update algo param config dropdown
+        self.gui_ticks = 0
         self.create_algo_param_ui_elements()
         self.enable_ui()
 
@@ -918,9 +924,12 @@ class Editor():
     def run(self):
         while True:
             # set time per tick
-            dt = self.clock.tick(self.fps)/1000
-            
-            self.net_sim.step_one_tick(dt)
+            dt = self.clock.tick(self.gui_fps)/1000
+            if self.one_fps_sim_mode:
+                if self.gui_ticks % self.gui_fps == 0:
+                    self.net_sim.step_one_tick(dt*self.gui_fps)
+            else:
+                self.net_sim.step_one_tick(dt)
 
             # handle events
             for event in pygame.event.get():
@@ -956,6 +965,8 @@ class Editor():
                         self.onclick_show_edges_checkbox()
                     if event.ui_element == self.objectives_infobox_toggle:
                         self.show_objectives_info_box()
+                    if event.ui_element == self.sim_fps_toggle:
+                        self.onpress_fps_toggle()
                     if event.ui_element == self.evo_start_button:
                         self.onpress_start_evo()
                     if event.ui_element == self.evo_stop_button:
@@ -1004,6 +1015,7 @@ class Editor():
             self.manager.draw_ui(self.display_surface)
 
             pygame.display.update()
+            self.gui_ticks += 1
 
 
 if __name__ == "__main__":

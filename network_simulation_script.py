@@ -3,6 +3,7 @@ import math
 from copy import deepcopy
 import sys
 import time
+from event import Event
 from son_pymoo import AlgorithmEnum, CrossoverEnum, MutationEnum, ObjectiveEnum, RunningMode, SamplingEnum, start_optimization
 from scipy.constants import speed_of_light
 from pygame_settings import GAME_HEIGHT, GAME_WIDTH
@@ -75,6 +76,7 @@ class Network_Simulation_State():
        
         self.current_network_name = network_name
         self.current_config_name = config_name
+        self.onFinishedEvent = Event()
         # auto mode
         if script_mode:
             # load network graph
@@ -87,6 +89,13 @@ class Network_Simulation_State():
             self.iterations = -1
             # start optimization -> happens in running_method
             # terminate all processes -> in optimization_finished
+    
+    ####### event hanlder methods
+    def AddSubscribersForFinishedEvent(self,objMethod):
+        self.onFinishedEvent += objMethod
+         
+    def RemoveSubscribersForFinishedEvent(self,objMethod):
+        self.onFinishedEvent -= objMethod
     
     ######## physics helper methods
     def get_max_x_y(self, graph: nx.Graph) -> tuple[float, float]:
@@ -393,7 +402,8 @@ class Network_Simulation_State():
 
     def trigger_evo_reset_invalid_activation_profile(self):
         # invoke evo_reset if threshhold is met
-        if self.ngen_since_last_evo_reset == self.config_params["reset_rate_in_ngen"]-1:
+        correction_factor = 1 if self.fps == 30 else 2
+        if self.ngen_since_last_evo_reset == self.config_params["reset_rate_in_ngen"]-correction_factor:
 
             # check if current activation profile is valid
             # or someone has moved since last call
@@ -492,6 +502,7 @@ class Network_Simulation_State():
         else:
             if not self.script_mode:
                 self.iterations = 0
+                self.onFinishedEvent("message")
 
     def reset_queue_flags(self):
         self.queue_flags = {"activation_dict": False, "objective_space": False,
@@ -533,13 +544,6 @@ class Network_Simulation_State():
                 self.start_evo(self.current_config_name)
 
         if self.running_mode == RunningMode.LIVE.value and self.optimization_running:
-            print(dt)
-            self.dt_since_last_history_update += dt
-            self.ticks_since_last_history_update += 1
-            self.dt_since_last_evo_reset += dt
-            self.dt_since_last_activation_profile_fetch += dt
-            self.running_time_in_s += dt
-            self.running_ticks += 1
             
             # if self.running_ticks % self.fps == 0 and self.running_ticks <= self.config_params["running_time_in_s"] * self.fps:
             self.move_some_users()
@@ -598,20 +602,25 @@ class Network_Simulation_State():
                 self.son.find_activation_profile_greedy_user(update_attributes=True)
 
             
-            # move users every second (because m/s is unit here) and update history every second
+            # update objectives every second
             if self.running_ticks % self.fps == 0 and self.running_ticks <= self.config_params["running_time_in_s"] * self.fps:
                 self.update_objective_history()
-            
-            if self.finished:
-                self.on_optimization_run_has_finished()
-             
 
             # stop if running time is exceeded
             # if self.running_time_in_s >= self.config_params["running_time_in_s"]:
             # stop if running time is over but time is translated into frames
             if self.running_ticks == self.config_params["running_time_in_s"] * self.fps:
                 self.stop_evo()
-
+            
+            self.dt_since_last_history_update += dt
+            self.ticks_since_last_history_update += 1
+            self.dt_since_last_evo_reset += dt
+            self.dt_since_last_activation_profile_fetch += dt
+            self.running_time_in_s += dt
+            self.running_ticks += 1
+            
+            if self.finished:
+                self.on_optimization_run_has_finished()
 
 if __name__ == "__main__":
     network_name = sys.argv[1]
@@ -620,7 +629,7 @@ if __name__ == "__main__":
     fps = 1
     simulation = Network_Simulation_State(son, script_mode=True, network_name=network_name, config_name=config_name, fps=fps)
     
-    dt = 0
+    dt = 1
     while(simulation.iterations < simulation.config_params["iterations"]):
         start_time = time.time()
         simulation.step_one_tick(dt)
