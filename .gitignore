@@ -3,3 +3,5 @@ __pycache__/*
 testing.py
 *.DS_Store
 .python-version
+*.sif
+venv/*
