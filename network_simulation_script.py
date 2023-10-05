@@ -480,13 +480,13 @@ class Network_Simulation_State():
             self.save_objective_history_to_file()
 
         print("finished " + str(self.iterations) + " iteraiton")
-
+                  
         self.reset_all_after_run()
-
         if self.iterations < self.config_params["iterations"]:
-            self.start_evo(new_config_name=self.current_network_name)
+            self.start_evo(new_config_name=self.current_config_name)
         else:
-            self.iterations = 0
+            if not self.script_mode:
+                self.iterations = 0
 
     def reset_queue_flags(self):
         self.queue_flags = {"activation_dict": False, "objective_space": False,
@@ -532,6 +532,11 @@ class Network_Simulation_State():
             self.dt_since_last_activation_profile_fetch += dt
             self.running_time_in_s += dt
             self.running_ticks += 1
+            
+            # if self.running_ticks == self.config_params["running_time_in_s"] * self.fps:
+            self.move_some_users()
+            # trigger evo_reset if current activation profile violates son topology and to adjust to movement changes
+            self.trigger_evo_reset_invalid_activation_profile()
 
             if not self.config_params["use_greedy_assign"]:
 
@@ -588,11 +593,6 @@ class Network_Simulation_State():
             # move users every second (because m/s is unit here) and update history every second
             if self.running_ticks % self.fps == 0 and self.running_ticks <= self.config_params["running_time_in_s"] * self.fps:
                 self.update_objective_history()
-            
-            # einrücken
-            self.move_some_users()
-            # trigger evo_reset if current activation profile violates son topology and to adjust to movement changes
-            self.trigger_evo_reset_invalid_activation_profile()
             
             if self.finished:
                 self.on_optimization_run_has_finished()
