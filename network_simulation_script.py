@@ -431,6 +431,7 @@ class Network_Simulation_State():
     
 
     def start_evo(self, new_config_name):
+
         if not os.path.exists(self.get_current_network_directory()):
             return ErrorEnum.NETWORK_MISSING.value
         
@@ -516,6 +517,8 @@ class Network_Simulation_State():
         self.finished = False
         # reset topology -> load graph from file
         self.load_current_adjacencies()
+        # apply current  param config
+        self.apply_current_network_params_to_graph()
         # empty message queues
         while not self.editor_message_queue.empty():
             self.editor_message_queue.get()
