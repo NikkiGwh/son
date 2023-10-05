@@ -1,23 +1,14 @@
-
-from copy import deepcopy
-import math
-from warnings import catch_warnings
 from pygame_gui._constants import UI_BUTTON_PRESSED
 import pygame
 import sys
-from network_simulation_script import ErrorEnum, Network_Simulation_State, default_algorithm_param_config
-from pygame_settings import *
-import networkx as nx
-import json
-from son_main_script import NodeType, Son, default_node_params
 import pygame_gui
 import os
-import multiprocessing
-import numpy as np
-from math import cos, sin
-from son_pymoo import AlgorithmEnum, CrossoverEnum, MutationEnum, ObjectiveEnum, RunningMode, SamplingEnum, start_optimization
 import cProfile
 import re
+from network_simulation_script import ErrorEnum, Network_Simulation_State, default_algorithm_param_config
+from pygame_settings import *
+from son_main_script import NodeType, Son
+from son_pymoo import AlgorithmEnum, CrossoverEnum, MutationEnum, ObjectiveEnum, RunningMode, SamplingEnum
 
 
 class CustomConfirmationDialog(pygame_gui.windows.UIConfirmationDialog):
@@ -58,6 +49,7 @@ class Editor():
         self.background.fill(pygame.colordict.THECOLORS["white"])
         self.clock = pygame.time.Clock()
         self.net_sim = net_sim
+        self.fps = 30
 
         # networkx 1 = 1m I want max 10 km -> 0.1 on screen equals 1 m
         self.unit_size_x, self.unit_size_y = (
@@ -306,6 +298,9 @@ class Editor():
             self.net_sim.config_params[self.right_mouse_action]["static_power"] = float(event.text)
         if event.ui_element == self.input_n_generations:
             self.net_sim.config_params["n_generations"] = float(event.text)
+        if event.ui_element == self.input_fps:
+            self.fps = int(event.text)
+            self.net_sim.fps = int(event.text)
         if event.ui_element == self.input_n_offsprings:
             self.net_sim.config_params["n_offsprings"] = float(event.text)
         if event.ui_element == self.input_pop_size:
@@ -695,6 +690,11 @@ class Editor():
             (20, 590), (-1, 30)), text='stop',
             manager=self.manager, container=self.ui_container)
         self.evo_stop_button.disable()
+        
+        self.input_fps = pygame_gui.elements.UITextEntryLine(
+            container=self.ui_container, relative_rect=pygame.Rect((100, 590), (50, 30)),
+            manager=self.manager, placeholder_text="fps", initial_text= str(self.fps))
+        self.input_fps.set_allowed_characters(text_input_integer_number_type_characters)
 
         self.dropdown_pick_running_mode = pygame_gui.elements.UIDropDownMenu(
             options_list=[item.value for item in RunningMode],
@@ -918,7 +918,7 @@ class Editor():
     def run(self):
         while True:
             # set time per tick
-            dt = self.clock.tick(30)/1000
+            dt = self.clock.tick(self.fps)/1000
             
             self.net_sim.step_one_tick(dt)
 

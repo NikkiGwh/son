@@ -361,8 +361,8 @@ class Network_Simulation_State():
 
             self.moving_users[user_node_id] = (new_direction_numpy[0], new_direction_numpy[1])
             moving_vector = (
-                self.moving_users[user_node_id][0] * self.config_params["moving_speed"],
-                self.moving_users[user_node_id][1] * self.config_params["moving_speed"])
+                self.moving_users[user_node_id][0] * self.config_params["moving_speed"] / self.fps,
+                self.moving_users[user_node_id][1] * self.config_params["moving_speed"] /self.fps)
 
     def check_direction_valid(self, user_node_id: str, moving_vector):
 
@@ -533,6 +533,7 @@ class Network_Simulation_State():
                 self.start_evo(self.current_config_name)
 
         if self.running_mode == RunningMode.LIVE.value and self.optimization_running:
+            print(dt)
             self.dt_since_last_history_update += dt
             self.ticks_since_last_history_update += 1
             self.dt_since_last_evo_reset += dt
@@ -540,7 +541,7 @@ class Network_Simulation_State():
             self.running_time_in_s += dt
             self.running_ticks += 1
             
-            # if self.running_ticks == self.config_params["running_time_in_s"] * self.fps:
+            # if self.running_ticks % self.fps == 0 and self.running_ticks <= self.config_params["running_time_in_s"] * self.fps:
             self.move_some_users()
             # trigger evo_reset if current activation profile violates son topology and to adjust to movement changes
             self.trigger_evo_reset_invalid_activation_profile()
@@ -616,8 +617,8 @@ if __name__ == "__main__":
     network_name = sys.argv[1]
     config_name = sys.argv[2]
     son = Son()
-    simulation = Network_Simulation_State(son, script_mode=True, network_name=network_name, config_name=config_name)
-    fps = 30
+    fps = 1
+    simulation = Network_Simulation_State(son, script_mode=True, network_name=network_name, config_name=config_name, fps=fps)
     
     dt = 0
     while(simulation.iterations < simulation.config_params["iterations"]):
