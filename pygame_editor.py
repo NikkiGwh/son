@@ -45,6 +45,7 @@ class Editor():
         self.gui_fps = 30
         self.selected_node_id = None
         self.show_moving_users = False
+        self.objectives_checkbox_active = False
         self.right_mouse_action = dropdown_menue_options_list[0]
         self.display_surface = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         self.background = pygame.Surface((GAME_WIDTH, GAME_HEIGHT))
@@ -195,11 +196,11 @@ class Editor():
             return
         else:
             self.objectives_checkbox_active = True
+            self.objectives_infobox_toggle.select()
 
         if len(self.net_sim.son.graph.nodes) == 0 or len(self.net_sim.son.graph.edges) == 0:
             self.info_text_box_objectives.set_text("There is no valid network yet.")
             self.info_text_box_objectives.show()
-            self.objectives_infobox_toggle.select()
             return
 
         objective_text = ""
@@ -209,9 +210,10 @@ class Editor():
         avg_dl_rate: float = self.net_sim.son.get_average_dl_datarate()
         avg_load: float = self.net_sim.son.get_average_network_load()
         total_energy_efficiency: float = self.net_sim.son.get_total_energy_efficiency()
+        avg_energy_efficiency = self.net_sim.son.get_avg_energy_efficiency()
         network_energy_consumption: float = self.net_sim.son.get_total_energy_consumption()
         objective_text = "user devices<br>avg_rssi: " + str(avg_rssi) + "<br>avg_sinr: " + str(avg_sinr) + "<br>avg_dl_rate: " + str(avg_dl_rate) + "<br><br>base stations<br>avg_load %: " + str(
-            avg_load) + "<br>total energy consumption: " + str(network_energy_consumption) + "<br>total_energy_efficiency: " + str(total_energy_efficiency)
+            avg_load) + "<br>total_energy_consumption: " + str(network_energy_consumption) + "<br>total_energy_efficiency: " + str(total_energy_efficiency) + "<br>avg_energy_efficiency: " + str(avg_energy_efficiency)
 
         self.info_text_box_objectives.set_text(objective_text)
         self.info_text_box_objectives.show()
@@ -515,7 +517,7 @@ class Editor():
             object_id="toggle",
             text="obj", manager=self.manager,
             container=self.ui_container)
-        self.objectives_checkbox_active = False
+        self.objectives_infobox_toggle.select() if self.objectives_checkbox_active else self.objectives_infobox_toggle.unselect()
 
         self.apply_ui_params_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
             (320, 230),

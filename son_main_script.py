@@ -324,7 +324,7 @@ class Son:
 
     def get_energy_efficiency_bs(self, bs_node_id: str):
         if self.graph.nodes.data()[bs_node_id]["active"] == False:
-            return -1
+            return 0
         bs_total_power_consumption = self.graph.nodes[bs_node_id]["total_power"]
 
         user_dl_datarate_sum = 0
@@ -508,7 +508,6 @@ class Son:
 
         Returns:
            average energy efficiency over active base stations
-           -1 if invalid
         """
 
         energy_efficiencies_sum =  0
@@ -517,7 +516,7 @@ class Son:
             energy_efficiencies_sum += self.get_energy_efficiency_bs(bs_node[0])
             active_bs_count+=1
 
-        return energy_efficiencies_sum / active_bs_count if energy_efficiencies_sum != 0 and active_bs_count != 0 else -1
+        return energy_efficiencies_sum / active_bs_count if energy_efficiencies_sum != 0 and active_bs_count != 0 else 0
 
     def get_average_sinr(self):
         """get average sinr over all cells
