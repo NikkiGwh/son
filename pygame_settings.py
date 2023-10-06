@@ -10,7 +10,7 @@ style = {
             "fill": {
                 "macro": "orange",
                 "micro": "blue",
-                "femto": "yellow",
+                "femto": "purple",
                 "pico": "lime",
                 "cell": "black",
                 "moving": (178, 6, 255, 1),
@@ -20,9 +20,9 @@ style = {
         },
         "sizes": {
             "radius": {
-                "macro": 15,
-                "micro": 10,
-                "femto": 5,
+                "macro": 20,
+                "micro": 15,
+                "femto": 10,
                 "pico": 5,
                 "cell": 3,
             }
@@ -35,7 +35,7 @@ style = {
         },
         "sizes": {
             "edge_width": {
-                "active": 3,
+                "active": 2,
                 "inactive": 1
             }
         }

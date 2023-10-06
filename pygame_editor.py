@@ -249,7 +249,7 @@ class Editor():
 
     def onclick_show_edges_checkbox(self):
         self.show_edges_checkbox_active = not self.show_edges_checkbox_active
-        self.show_edges_checkbox.select() if self.show_edges_checkbox_active else self.show_edges_checkbox.unselect()
+        self.show_edges_toggle.select() if self.show_edges_checkbox_active else self.show_edges_toggle.unselect()
 
 
     def ontoggle_greedy_to_moving(self):
@@ -500,13 +500,14 @@ class Editor():
             container=self.ui_container
         )
 
-        self.show_edges_checkbox = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
+        self.show_edges_toggle = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
             (320, 20),
             (50, 30)),
             object_id="toggle",
             text="show edges", manager=self.manager,
             container=self.ui_container)
         self.show_edges_checkbox_active = True
+        self.show_edges_toggle.select()
 
         self.objectives_infobox_toggle = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
             (370, 20),
@@ -516,7 +517,7 @@ class Editor():
             container=self.ui_container)
         self.objectives_checkbox_active = False
 
-        self.apply_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
+        self.apply_ui_params_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
             (320, 230),
             (-1, 30)),
             object_id="#apply_button",
@@ -737,7 +738,7 @@ class Editor():
     def on_dropdown_canvas_action_changed(self, event: pygame.event.Event):
         self.right_mouse_action = event.text
         if event.text == "remove" or event.text == "cell":
-            self.apply_button.disable()
+            self.apply_ui_params_button.disable()
             self.input_antennas.disable()
             self.input_channel_bandwidth.disable()
             self.input_frequency.disable()
@@ -746,7 +747,7 @@ class Editor():
             self.input_transmission_power.disable()
             self.dropdown_menu_pick_network.disable()
         else:
-            self.apply_button.enable()
+            self.apply_ui_params_button.enable()
             self.dropdown_menu_pick_network.enable()
             self.input_antennas.enable()
             self.input_antennas.set_text(
@@ -831,7 +832,6 @@ class Editor():
     
     def onpress_stop_evo(self):
         self.net_sim.force_stop_evo()
-
 
     def onpress_start_evo(self):
 
@@ -957,11 +957,11 @@ class Editor():
                 if event.type == pygame_gui.UI_BUTTON_PRESSED:
                     if event.ui_element == self.switch_algorithm_mode_toggle:
                         self.switch_algorithm_mode()
-                    if event.ui_element == self.apply_button:
+                    if event.ui_element == self.apply_ui_params_button:
                         self.onpress_apply_params_from_ui()
                     if event.ui_element == self.save_button:
                         self.onpress_save_network()
-                    if event.ui_element == self.show_edges_checkbox:
+                    if event.ui_element == self.show_edges_toggle:
                         self.onclick_show_edges_checkbox()
                     if event.ui_element == self.objectives_infobox_toggle:
                         self.show_objectives_info_box()

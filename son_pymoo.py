@@ -34,40 +34,40 @@ class ObjectiveEnum(Enum):
     AVG_RSSI = "AVG_RSSI"
     AVG_DL_RATE = "AVG_DL_RATE"
     TOTAL_ENERGY_EFFICIENCY = "TOTAL_ENERGY_EFFICIENCY"
-    AVG_ENERGY__EFFICENCY = "ENERGY_EFFICIENCY"
-
+    AVG_ENERGY_EFFICENCY = "AVG_ENERGY_EFFICIENCY"
 
 class RunningMode(Enum):
     STATIC = "STATIC"
     LIVE = "LIVE"
-
-
 class AlgorithmEnum(Enum):
     NSGA2 = "NSGA2"
     NSGA3 = "NSGA3"
-
-
 class CrossoverEnum(Enum):
     ONE_POINT_CROSSOVER = "ONE_POINT_CROSSOVER"
     UNIFORM_CROSSOVER = "UNIFORM_CROSSOVER"
     SBX_CROSSOVER = "SBX_CROSSOVER"
     SON_CROSSOVER = "SON_CROSSOVER"
-
-
 class MutationEnum(Enum):
-    RANDOM_FLIP = "RANDOM_FLIP"
     BIT_FLIP = "BIT_FLIP"
-    SMALL_BS_FLIP = "SMALL_BS_FLIP"
-    BIG_BS_FLIP = "BIG_BS_FLIP"
     PM_MUTATION = "PM_MUTATION"
-
-
+    SON_MUTATION= "SON_MUTATION"
 class SamplingEnum(Enum):
-    RANDOM_SAMPLING = "RANDOM_SAMPLING"
-    SMALL_BS_FIRST_SAMPLING = "SMALL_BS_FIRST_SAMPLING"
-    BIG_BS_FIRST_SAMPLING = "BIG_BS_FIRST_SAMPLING"
+    SON_RANDOM_SAMPLING = "SON_RANDOM_SAMPLING"
+    # SMALL_BS_FIRST_SAMPLING = "SMALL_BS_FIRST_SAMPLING"
+    # BIG_BS_FIRST_SAMPLING = "BIG_BS_FIRST_SAMPLING"
     HIGH_RSSI_FIRST_SAMPLING = "HIGH_RSSI_FIRST_SAMPLING"
 
+def convert_design_space_ind_to_decision_space_ind(
+        son: Son, decision_space_ind: dict[str, str]):
+    
+    possible_activation_dict = son.get_possible_activations_dict()
+
+    # create decision space encoding for individuum -> orienting on possible_activation_matrix order
+    ind_decision_space = []
+    for _, user_id in enumerate(possible_activation_dict):
+        ind_decision_space.append(possible_activation_dict[user_id].index(decision_space_ind[user_id]))
+
+    return ind_decision_space
 
 def convert_design_space_pop_to_decision_space_pop(
         son: Son, design_space_pop: list[dict[str, str]],
@@ -93,7 +93,7 @@ def convert_design_space_pop_to_decision_space_pop(
 
 
 def convert_decision_space_ind_to_design_space_ind(
-        son: Son, decision_space_ind: list[int], repair):
+        son: Son, decision_space_ind: list[int]):
 
     individuum = {}
     possible_activation_dict = son.get_possible_activations_dict()
@@ -105,14 +105,13 @@ def convert_decision_space_ind_to_design_space_ind(
 
     return individuum
 
-
 def convert_decision_Space_pop_to_design_space_pop(
         son: Son, decision_space_pop: list[list[int]],
         repair=False):
     pop = []
 
     for _, individuum in enumerate(decision_space_pop):
-        pop.append(convert_decision_space_ind_to_design_space_ind(son, individuum, repair=repair))
+        pop.append(convert_decision_space_ind_to_design_space_ind(son, individuum))
 
     return pop
 
@@ -140,8 +139,8 @@ def select_solution(son: Son, decision_space, objective_space: np.ndarray,
     nF = (objective_space - approx_ideal) / (approx_nadir - approx_ideal)
     decomp = ASF()
     i = decomp.do(nF, 1/weights).argmin()
-    design_space_ind = convert_decision_space_ind_to_design_space_ind(
-        son, decision_space[i], repair=False)
+
+    design_space_ind = convert_decision_space_ind_to_design_space_ind(son, decision_space[i])
     return design_space_ind
 
 
@@ -176,8 +175,7 @@ class SonProblemElementWise(ElementwiseProblem):
         super().__init__(n_var=n_var, n_obj=len(obj_dict), xl=np.full_like(xu, 0), xu=xu)
 
     def _evaluate(self, x, out, *args, **kwargs):
-        x_design_space = convert_decision_space_ind_to_design_space_ind(
-            self.son_original, x, repair=False)
+        x_design_space = convert_decision_space_ind_to_design_space_ind(self.son_original, x)
         self.son_original.apply_activation_dict(x_design_space)
         # prepare objectives
         objectives = np.array([])
@@ -190,13 +188,14 @@ class SonProblemElementWise(ElementwiseProblem):
             objectives = np.append(objectives, self.son_original.get_total_energy_consumption())
         if ObjectiveEnum.TOTAL_ENERGY_EFFICIENCY.value in self.obj_dict:
             objectives = np.append(objectives, -self.son_original.get_total_energy_efficiency())
+        if ObjectiveEnum.AVG_ENERGY_EFFICENCY.value in self.obj_dict:
+            objectives = np.append(objectives, -self.son_original.get_avg_energy_efficiency())
         if ObjectiveEnum.AVG_SINR.value in self.obj_dict:
             objectives = np.append(objectives, -self.son_original.get_average_sinr())
         if ObjectiveEnum.AVG_DL_RATE.value in self.obj_dict:
             objectives = np.append(objectives, -self.son_original.get_average_dl_datarate())
         if ObjectiveEnum.AVG_RSSI.value in self.obj_dict:
             objectives = np.append(objectives, -self.son_original.get_average_rssi())
-
         out["F"] = np.array(objectives)
 
 
@@ -214,9 +213,7 @@ def repair_population(pop: np.ndarray, xl: np.ndarray, xu: np.ndarray):
             if gene_value > xu[gene_index] or gene_value < xl[gene_index]:
                 pop[individuum_index][gene_index] = np.random.randint(
                     xl[gene_index], xu[gene_index]+1)
-
     return pop
-
 
 class SonRepairSampling(Sampling):
 
@@ -234,13 +231,27 @@ class SonRepairSampling(Sampling):
         return seed_pop_decision_space
 
 
-class SonSampling(Sampling):
+class SonRandomSampling(Sampling):
     def _do(self, problem: SonProblemElementWise, n_samples, **kwargs):
         X = np.empty((n_samples, problem.n_var), int)
 
         for i in range(n_samples):
             for j in range(problem.n_var):
                 X[i][j] = np.random.randint(problem.xl[j], problem.xu[j]+1)
+        return X
+class HighRssiFirstSampling(Sampling):
+    def _do(self, problem: SonProblemElementWise, n_samples, **kwargs):
+        X = np.empty((n_samples, problem.n_var), int)
+
+        # create the first n_samples-1 individuums randomly
+        for i in range(n_samples-1):
+            for j in range(problem.n_var):
+                X[i][j] = np.random.randint(problem.xl[j], problem.xu[j]+1)
+        
+        # last individuum is created with greedy assignment (highest rssi connection for each user)
+        greedy_activation_design_space = problem.son_original.find_activation_profile_greedy_user()
+        greedy_activation_decision_space = convert_design_space_ind_to_decision_space_ind(problem.son_original, greedy_activation_design_space)
+        X[-1] = greedy_activation_decision_space
         return X
 
 
@@ -356,6 +367,7 @@ class MyCallback(Callback):
                 self.son,
                 decision_space=algorithm.pop.get("X"),
                 objective_space=algorithm.pop.get("F"))
+            
             self.n_gen_since_last_fetch = 0
             self.pymoo_message_queue.put(
                 {"activation_dict": activation_dict,
@@ -401,10 +413,12 @@ def start_optimization(
         history = True
 
     # sampling
-    if (sampling == SamplingEnum.RANDOM_SAMPLING.value):
-        samplingConfig = SonSampling()
+    if (sampling == SamplingEnum.SON_RANDOM_SAMPLING.value):
+        samplingConfig = SonRandomSampling()
+    elif sampling == SamplingEnum.HIGH_RSSI_FIRST_SAMPLING.value:
+        samplingConfig = HighRssiFirstSampling()
     else:
-        samplingConfig = SonSampling()
+        samplingConfig = SonRandomSampling()
 
     # crossover
     if (crossover == CrossoverEnum.SBX_CROSSOVER.value):
@@ -570,6 +584,7 @@ def start_optimization(
                   ObjectiveEnum.AVG_LOAD.name: sonProblem.son_original.get_average_network_load(),
                   ObjectiveEnum.POWER_CONSUMPTION.name: sonProblem.son_original.get_total_energy_consumption(),
                   ObjectiveEnum.TOTAL_ENERGY_EFFICIENCY.name: sonProblem.son_original.get_total_energy_efficiency(),
+                  ObjectiveEnum.AVG_ENERGY_EFFICENCY.name: sonProblem.son_original.get_avg_energy_efficiency(),
                   ObjectiveEnum.AVG_DL_RATE.name: sonProblem.son_original.get_average_dl_datarate()}))
 
             sonProblem.son_original.save_json_adjacency_graph_to_file(

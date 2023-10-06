@@ -23,13 +23,13 @@ class ErrorEnum(Enum):
 default_algorithm_param_config = {
     "pop_size": 200,
     "n_offsprings": 40,
-    "n_generations": 10000000,
+    "n_generations": 100,
     "termination": "",
-    "sampling": SamplingEnum.RANDOM_SAMPLING.value,
+    "sampling": SamplingEnum.SON_RANDOM_SAMPLING.value,
     "crossover": CrossoverEnum.UNIFORM_CROSSOVER.value,
     "mutation": MutationEnum.PM_MUTATION.value,
     "eliminate_duplicates": "True",
-    "objectives": [ObjectiveEnum.AVG_DL_RATE.value, ObjectiveEnum.TOTAL_ENERGY_EFFICIENCY.value],
+    "objectives": [ObjectiveEnum.AVG_DL_RATE.value, ObjectiveEnum.AVG_ENERGY_EFFICENCY.value],
     "algorithm": AlgorithmEnum.NSGA2.value,
     "moving_speed": 28.0,
     "reset_rate_in_ngen": 5,
@@ -387,13 +387,14 @@ class Network_Simulation_State():
     ######## live running methods
     ### TODO make it dynamic accoridng to objective selection 
     def update_objective_history(self):
-        current_total_energy_efficiency = self.son.get_total_energy_efficiency()
+        # current_total_energy_efficiency = self.son.get_total_energy_efficiency()
+        current_avg_energy_efficiency = self.son.get_avg_energy_efficiency()
         current_avg_dl_datarate = self.son.get_average_dl_datarate()
         current_avg_user_degree = self.son.get_average_userNode_degree()
 
         self.objective_history.append(
             (round(self.running_time_in_s, 2),
-             self.running_ticks, current_total_energy_efficiency, current_avg_dl_datarate, current_avg_user_degree, self.ngen_total))
+             self.running_ticks, current_avg_energy_efficiency, current_avg_dl_datarate, current_avg_user_degree, self.ngen_total))
 
         self.dt_since_last_history_update = 0
         self.ticks_since_last_history_update = 0
@@ -446,15 +447,15 @@ class Network_Simulation_State():
         if self.iterations == - 1:
             # in case of script mode self.iterations initially is -1
             self.iterations = 0
-
+            
+        if self.running_mode == RunningMode.LIVE.value and self.config_params["moving_selection_name"] == "":
+            return ErrorEnum.NO_MOVING_SELECTION.value
+        
         if self.iterations == 0:
             #try to save new config if its the first iteration of the experiment
             save_response_value = self.save_new_config_to_file(new_config_name=new_config_name)
             if save_response_value != "":
                 return save_response_value
-            
-        if self.running_mode == RunningMode.LIVE.value and self.config_params["moving_selection_name"] == "":
-            return ErrorEnum.NO_MOVING_SELECTION.value
         
         # start optimization
         if not self.config_params["use_greedy_assign"]:
@@ -572,7 +573,6 @@ class Network_Simulation_State():
 
                     self.activation = self.queue_flags["activation_dict"]
                     self.dt_since_last_activation_profile_fetch = 0
-                    print("activation")
 
                 if self.queue_flags["n_gen_since_last_fetch"] is not False:
                     self.n_gen_since_last_fetch = self.queue_flags["n_gen_since_last_fetch"]
@@ -593,10 +593,10 @@ class Network_Simulation_State():
 
                 else:
                     # if no activation profile is present -> use greedy approach for all useres
-                    self.son.find_activation_profile_greedy_user(update_attributes=True)
+                    self.son.apply_activation_profile_greedy_user(update_attributes=True)
 
             if self.config_params["use_greedy_assign"]:
-                self.son.find_activation_profile_greedy_user(update_attributes=True)
+                self.son.apply_activation_profile_greedy_user(update_attributes=True)
 
             
             if RunningMode.LIVE:

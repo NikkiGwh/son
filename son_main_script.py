@@ -1,22 +1,13 @@
-import networkx as nx
-import numpy as np
-from sklearn.metrics import euclidean_distances
-from sklearn.utils import gen_batches
+import json
 import math
 from enum import Enum
-from functools import reduce, total_ordering
-
-import pandas as pd
-
 from networkx.readwrite import json_graph
-import json
-
-
+import networkx as nx
+import numpy as np
 class CellOrderTwo(Enum):
     RANDOM = 1
     HIGHEST_DEGREE_FIRST = 4
     LOWEST_DEGREE_FIRST = 5
-
 
 class BaseStationOrder(Enum):
     MACRO_FIRST = "macro"
@@ -24,19 +15,15 @@ class BaseStationOrder(Enum):
     FEMTO_FIRST = "femto"
     PICO_FIRST = "pico"
 
-
 class BinPackingType(Enum):
     BEST_FIT = 1
     WORST_FIT = 2
-
-
 class NodeType(Enum):
     CELL = "cell"
     MICRO = "micro"
     MACRO = "macro"
     FEMTO = "femto"
     PICO = "pico"
-
 
 default_node_params = {
    "macro": {
@@ -86,11 +73,9 @@ default_node_params = {
     }
 }
 
-
 class Son:
     def __init__(self, adjacencies_file_name: str = "", parameter_config_file_name: str = "") -> None:
 
-        # initialize super parameter
         # this is -80 dbm
         self.min_rssi = 1.0000000000000001e-11
         self.network_node_params = default_node_params
@@ -112,7 +97,7 @@ class Son:
         edge_list_with_attributes: list[tuple[str, str, dict]] = []
 
         self.graph.clear_edges()
-        # only add edges for cell-bs pairs which hav minimum rssi signal strength
+        # only add edges for cell-bs pairs which have minimum rssi signal strength
         for _, cell in enumerate(
                 filter(self.filter_user_nodes, self.graph.nodes.data())):
             for _, bs_node in enumerate(
@@ -129,97 +114,6 @@ class Son:
                         (cell[0], bs_node[0], attribute_dic))
         self.graph.add_edges_from(edge_list_with_attributes)
 
-    def get_node_style(self):
-        node_colors: list[str] = []
-        sizes: list[int] = []
-        node_edge_colors: list[str] = []
-        node_alphas: list[float] = []
-
-        alpha_value_dict = {"active": 1, "inactive": 0.5, "cell": 1}
-        node_edge_color_dict = {"active": "#aaff80",
-                                "inactive": "grey", "cell": "black", "overload": "#ff0000"}
-        node_color_dict = {"macro": "orange", "micro": "blue", "pico": "pink",
-                           "femto": "yellow", "inactive": "grey", "cell": "black"}
-        node_sizes_dict = {"macro": 300, "micro": 100, "femto": 80, "pico": 50, "cell": 50}
-
-        for _, node in enumerate(self.graph.nodes.data()):
-            if (node[1]["type"] == NodeType.MICRO.value):
-                sizes.append(node_sizes_dict["micro"])
-                if node[1]["active"]:
-                    node_colors.append(node_color_dict["micro"])
-                    if node[1]["load"] > 1:
-
-                        node_edge_colors.append(node_edge_color_dict["overload"])
-                    else:
-                        node_edge_colors.append(node_edge_color_dict["active"])
-                    node_alphas.append(alpha_value_dict["active"])
-                else:
-                    node_colors.append(node_color_dict["inactive"])
-                    node_edge_colors.append(node_edge_color_dict["inactive"])
-                    node_alphas.append(alpha_value_dict["inactive"])
-
-            elif node[1]["type"] == NodeType.MACRO.value:
-                sizes.append(node_sizes_dict["macro"])
-                if node[1]["active"]:
-                    node_colors.append(node_color_dict["macro"])
-                    if node[1]["load"] > 1:
-                        node_edge_colors.append(node_edge_color_dict["overload"])
-                    else:
-                        node_edge_colors.append(node_edge_color_dict["active"])
-                    node_alphas.append(alpha_value_dict["active"])
-                else:
-                    node_colors.append((node_color_dict["inactive"]))
-                    node_edge_colors.append(node_edge_color_dict["inactive"])
-                    node_alphas.append(alpha_value_dict["inactive"])
-
-            elif node[1]["type"] == NodeType.FEMTO.value:
-                sizes.append(node_sizes_dict["femto"])
-                if node[1]["active"]:
-                    node_colors.append(node_color_dict["femto"])
-                    if node[1]["load"] > 1:
-                        node_edge_colors.append(node_edge_color_dict["overload"])
-                    else:
-                        node_edge_colors.append(node_edge_color_dict["active"])
-                    node_alphas.append(alpha_value_dict["active"])
-                else:
-                    node_colors.append((node_color_dict["inactive"]))
-                    node_edge_colors.append(node_edge_color_dict["inactive"])
-                    node_alphas.append(alpha_value_dict["inactive"])
-
-            elif node[1]["type"] == NodeType.PICO.value:
-                sizes.append(node_sizes_dict["pico"])
-                if node[1]["active"]:
-                    node_colors.append(node_color_dict["pico"])
-                    if node[1]["load"] > 1:
-                        node_edge_colors.append(node_edge_color_dict["overload"])
-                    else:
-                        node_edge_colors.append(node_edge_color_dict["active"])
-                    node_alphas.append(alpha_value_dict["active"])
-                else:
-                    node_colors.append((node_color_dict["inactive"]))
-                    node_edge_colors.append(node_edge_color_dict["inactive"])
-                    node_alphas.append(alpha_value_dict["inactive"])
-
-            elif node[1]["type"] == NodeType.CELL.value:
-                node_colors.append(node_color_dict["cell"])
-                node_alphas.append(alpha_value_dict["cell"])
-                node_edge_colors.append(node_edge_color_dict["cell"])
-                sizes.append(node_sizes_dict["cell"])
-        return (node_colors, sizes, node_edge_colors, node_alphas)
-
-    def get_edge_style(self):
-        colors: list[str] = []
-        width: list[float] = []
-
-        for _, edge in enumerate(self.graph.edges.data()):
-            if (edge[2]["active"] == True):
-                colors.append("green")
-                width.append(2)
-            else:
-                colors.append("grey")
-                width.append(0.5)
-        return (colors, width)
-
     ###################### network update methods ###################
 
     def update_network_attributes(self):
@@ -228,7 +122,7 @@ class Son:
         """
         self.update_user_node_attributes()
         self.update_bs_node_attributes()
-        self.update_user_node_dl_datarate()
+        # self.update_user_node_dl_datarate()
         # self.update_edge_attributes()
 
     def update_bs_node_attributes(self):
@@ -270,9 +164,7 @@ class Son:
 
     def update_user_node_attributes(self):
         """ update dynamic user_node attributes depending on active edge (sinr, rssi)
-        not dl_datarate because this value has to be updated separately after other attributes of bs_nodes and
-        user_nodes were updated
-
+        no dl_datarate
         """
 
         for _, user_node in enumerate(filter(self.filter_user_nodes, self.graph.nodes.data())):
@@ -281,12 +173,11 @@ class Son:
             user_node[1]["rssi"] = self.get_rssi_cell(
                 user_node[0], (user_node[0], connected_bs)) if connected_bs is not None else 0
 
-            # user_node[1]["dl_datarate"] = self.get_dl_datarate_user(user_node[0])
-
-    def update_user_node_dl_datarate(self):
-        """updates downlink data rate for users -> call after update_user_nodes and update_bs_nodes"""
-        for _, user_node in enumerate(filter(self.filter_user_nodes, self.graph.nodes.data())):
-            user_node[1]["dl_datarate"] = self.get_dl_datarate_user(user_node[0])
+    # def update_user_node_dl_datarate(self):
+    #     """updates downlink data rate for users -> call after update_user_nodes and update_bs_nodes"""
+    #     for _, user_node in enumerate(filter(self.filter_user_nodes, self.graph.nodes.data())):
+    #         user_node[1]["dl_datarate"] = self.get_dl_datarate_user(user_node[0])
+    
 
     def update_edge_attributes(self):
         """ updates dynamic edge attributes (rssi)
@@ -433,14 +324,14 @@ class Son:
 
     def get_energy_efficiency_bs(self, bs_node_id: str):
         if self.graph.nodes.data()[bs_node_id]["active"] == False:
-            return 0
-        bs_total_power_consumption = self.graph.nodes.data()[bs_node_id]["total_power"]
+            return -1
+        bs_total_power_consumption = self.graph.nodes[bs_node_id]["total_power"]
 
         user_dl_datarate_sum = 0
 
         for _, edge in enumerate(self.graph[bs_node_id].items()):
             if edge[1]["active"]:
-                user_dl_datarate_sum += self.graph.nodes[edge[0]]["dl_datarate"]
+                user_dl_datarate_sum +=  self.get_dl_datarate_user(edge[0])
 
         return user_dl_datarate_sum / bs_total_power_consumption
 
@@ -597,18 +488,36 @@ class Son:
         return energy_consumption
 
     def get_total_energy_efficiency(self):
-        """get energy efficiency of all base stations, including dynamic, static and standby power consumption
+        """get energy efficiency over all base stations, including dynamic, static and standby power consumption
 
         Returns:
            energy efficiency of base stations
         """
         power_consumption_sum = self.get_total_energy_consumption()
 
-        avg_dl_datarate = self.get_average_dl_datarate()
+        dl_datarate_sum =  0
+        for _, user_node in enumerate(filter(self.filter_user_nodes, self.graph.nodes.data())):
+            dl_datarate_sum += self.get_dl_datarate_user( user_node[0])
 
-        if avg_dl_datarate <= 0 or power_consumption_sum <= 0:
+        if dl_datarate_sum <= 0 or power_consumption_sum <= 0:
             return 0
-        return avg_dl_datarate / power_consumption_sum
+        return dl_datarate_sum / power_consumption_sum
+   
+    def get_avg_energy_efficiency(self):
+        """get average energy efficiency over all active base stations
+
+        Returns:
+           average energy efficiency over active base stations
+           -1 if invalid
+        """
+
+        energy_efficiencies_sum =  0
+        active_bs_count = 0
+        for _, bs_node in enumerate(filter(self.filter_active_bs_nodes, self.graph.nodes.data())):
+            energy_efficiencies_sum += self.get_energy_efficiency_bs(bs_node[0])
+            active_bs_count+=1
+
+        return energy_efficiencies_sum / active_bs_count if energy_efficiencies_sum != 0 and active_bs_count != 0 else -1
 
     def get_average_sinr(self):
         """get average sinr over all cells
@@ -625,10 +534,10 @@ class Son:
         return sinr_sum/count
 
     def get_average_rssi(self):
-        """get average rssi over all cells
+        """get average rssi over all users
 
         Returns:
-            average rssi over all cells
+            average rssi over all users
         """
         rssi_sum = 0
         count = 0
@@ -639,21 +548,22 @@ class Son:
         return rssi_sum/count
 
     def get_average_dl_datarate(self):
-        """get average download datarate over all cells
+        """get average download datarate over all users
 
         Returns:
-            average download datarate over all cells
+            average download datarate over all users
         """
         dl_datarate_sum = 0
         count = 0
         for _, cell_node in enumerate(
                 filter(self.filter_user_nodes, self.graph.nodes.data())):
-            dl_datarate_sum += cell_node[1]["dl_datarate"]
+            dl_datarate_sum += self.get_dl_datarate_user(cell_node[0])
             count += 1
 
         return dl_datarate_sum/count
     
     def get_average_userNode_degree(self):
+        #TODO check if this is right
         return len(self.graph.edges)/len(list(filter(self.filter_user_nodes, self.graph.nodes.data())))
     
     def get_total_UserNode_edges(self):
@@ -679,18 +589,27 @@ class Son:
             self.update_network_attributes()
         return best_bs_id
 
-    def find_activation_profile_greedy_user(self, update_attributes=False):
+    def apply_activation_profile_greedy_user(self, update_attributes=False):
         """iterrates through all user nodes, applies greedy assignments returns 
         activation profile dict
         """
         activation_dict: dict[str, str] = {}
-        for _, user_node in enumerate(
-                filter(self.filter_user_nodes, self.graph.nodes.data())):
-
+        for _, user_node in enumerate(filter(self.filter_user_nodes, self.graph.nodes.data())):
             best_bs_id = self.greedy_assign_user_to_bs(user_node[0], set_edge_activation=True)
             activation_dict[user_node[0]] = best_bs_id
+
         if (update_attributes):
             self.update_network_attributes()
+        return activation_dict
+    
+    def find_activation_profile_greedy_user(self):
+        """finds greedy activation profile for this network but doesn't apply it
+        """
+        activation_dict: dict[str, str] = {}
+        for _, user_node in enumerate(filter(self.filter_user_nodes, self.graph.nodes.data())):
+            best_bs_id = self.greedy_assign_user_to_bs(user_node[0], set_edge_activation=True)
+            activation_dict[user_node[0]] = best_bs_id
+            
         return activation_dict
 
     ############### get encodings, apply encodings, save/load encodings and adjacencies ###################
@@ -816,14 +735,9 @@ class Son:
 ################# script main #######################
 
 def main():
-    #  son = Son(adjacencies_file_name="datastore/hetNet/algorithm_config_3STATIC/ind_result_1.json",
-    #           parameter_config_file_name="datastore/hetNet/hetNet_network_config.json")
-
-    # son.draw_current_network()
     print("son_main_script main()")
     # nx.write_gml(son.graph, "graph.gml")
     # nx.write_graphml_lxml(son.graph, "graph.graphml")
-
 
 if __name__ == "__main__":
     main()
