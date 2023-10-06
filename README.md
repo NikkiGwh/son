@@ -56,3 +56,8 @@ apptainer build nns.sif nns.def
 ```
 sbatch slurm_job.sh
 ```
+To change how the programm is run, change either the `.def` file, or use 
+```
+apptainer exec nns.sif COMMAND
+```
+in the `slurm_job.sh`.
