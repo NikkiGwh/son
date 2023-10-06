@@ -33,7 +33,8 @@ class ObjectiveEnum(Enum):
     POWER_CONSUMPTION = "POWER_CONSUMPTION"
     AVG_RSSI = "AVG_RSSI"
     AVG_DL_RATE = "AVG_DL_RATE"
-    ENERGY_EFFICIENCY = "ENERGY_EFFICIENCY"
+    TOTAL_ENERGY_EFFICIENCY = "TOTAL_ENERGY_EFFICIENCY"
+    AVG_ENERGY__EFFICENCY = "ENERGY_EFFICIENCY"
 
 
 class RunningMode(Enum):
@@ -187,8 +188,8 @@ class SonProblemElementWise(ElementwiseProblem):
             objectives = np.append(objectives, self.son_original.get_avg_overlad())
         if ObjectiveEnum.POWER_CONSUMPTION.value in self.obj_dict:
             objectives = np.append(objectives, self.son_original.get_total_energy_consumption())
-        if ObjectiveEnum.ENERGY_EFFICIENCY.value in self.obj_dict:
-            objectives = np.append(objectives, -self.son_original.get_energy_efficiency())
+        if ObjectiveEnum.TOTAL_ENERGY_EFFICIENCY.value in self.obj_dict:
+            objectives = np.append(objectives, -self.son_original.get_total_energy_efficiency())
         if ObjectiveEnum.AVG_SINR.value in self.obj_dict:
             objectives = np.append(objectives, -self.son_original.get_average_sinr())
         if ObjectiveEnum.AVG_DL_RATE.value in self.obj_dict:
@@ -568,7 +569,7 @@ def start_optimization(
                   ObjectiveEnum.AVG_RSSI.name: sonProblem.son_original.get_average_rssi(),
                   ObjectiveEnum.AVG_LOAD.name: sonProblem.son_original.get_average_network_load(),
                   ObjectiveEnum.POWER_CONSUMPTION.name: sonProblem.son_original.get_total_energy_consumption(),
-                  ObjectiveEnum.ENERGY_EFFICIENCY.name: sonProblem.son_original.get_energy_efficiency(),
+                  ObjectiveEnum.TOTAL_ENERGY_EFFICIENCY.name: sonProblem.son_original.get_total_energy_efficiency(),
                   ObjectiveEnum.AVG_DL_RATE.name: sonProblem.son_original.get_average_dl_datarate()}))
 
             sonProblem.son_original.save_json_adjacency_graph_to_file(

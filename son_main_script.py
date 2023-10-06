@@ -596,7 +596,7 @@ class Son:
 
         return energy_consumption
 
-    def get_energy_efficiency(self):
+    def get_total_energy_efficiency(self):
         """get energy efficiency of all base stations, including dynamic, static and standby power consumption
 
         Returns:

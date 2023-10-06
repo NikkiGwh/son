@@ -6,7 +6,6 @@ import time
 from event import Event
 from son_pymoo import AlgorithmEnum, CrossoverEnum, MutationEnum, ObjectiveEnum, RunningMode, SamplingEnum, start_optimization
 from scipy.constants import speed_of_light
-from pygame_settings import GAME_HEIGHT, GAME_WIDTH
 from son_main_script import Son, default_node_params
 import networkx as nx
 import numpy as np
@@ -30,7 +29,7 @@ default_algorithm_param_config = {
     "crossover": CrossoverEnum.UNIFORM_CROSSOVER.value,
     "mutation": MutationEnum.PM_MUTATION.value,
     "eliminate_duplicates": "True",
-    "objectives": [ObjectiveEnum.AVG_DL_RATE.value, ObjectiveEnum.ENERGY_EFFICIENCY.value],
+    "objectives": [ObjectiveEnum.AVG_DL_RATE.value, ObjectiveEnum.TOTAL_ENERGY_EFFICIENCY.value],
     "algorithm": AlgorithmEnum.NSGA2.value,
     "moving_speed": 28.0,
     "reset_rate_in_ngen": 5,
@@ -388,14 +387,13 @@ class Network_Simulation_State():
     ######## live running methods
     ### TODO make it dynamic accoridng to objective selection 
     def update_objective_history(self):
-        current_energy_efficiency = self.son.get_energy_efficiency()
-        # current_energy_efficiency = self.son.get_total_energy_consumption()
+        current_total_energy_efficiency = self.son.get_total_energy_efficiency()
         current_avg_dl_datarate = self.son.get_average_dl_datarate()
         current_avg_user_degree = self.son.get_average_userNode_degree()
 
         self.objective_history.append(
             (round(self.running_time_in_s, 2),
-             self.running_ticks, current_energy_efficiency, current_avg_dl_datarate, current_avg_user_degree, self.ngen_total))
+             self.running_ticks, current_total_energy_efficiency, current_avg_dl_datarate, current_avg_user_degree, self.ngen_total))
 
         self.dt_since_last_history_update = 0
         self.ticks_since_last_history_update = 0
