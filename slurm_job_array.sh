@@ -52,6 +52,7 @@ back=${parameters[6]}
 
 /bin/hostname
 echo ${experimentName}FRD${alg}${dm}${k}${obs}${ms}${ele}${back}EXSTARTED
-java -jar morp-benchmark-suite-1.0.0-SNAPSHOT.one-jar.jar -ex $experimentName -kn $k -ms $ms -ele $ele -o $obs ${back} -p 100 -g 200 -n NSGAIIDMS${alg}${dm} -pnm ${alg} -dm ${dm} -df EUCLID -inter -ir 31
+# java -jar morp-benchmark-suite-1.0.0-SNAPSHOT.one-jar.jar -ex $experimentName -kn $k -ms $ms -ele $ele -o $obs ${back} -p 100 -g 200 -n NSGAIIDMS${alg}${dm} -pnm ${alg} -dm ${dm} -df EUCLID -inter -ir 31
+srun apptainer exec nns.sif python network_simulation_script.py hetNet${k} hetNet2_predefined_70_greedy
 echo ${experimentName}FRD${alg}${dm}${k}${obs}${ms}${ele}${back}EXENDED
 /bin/hostname
