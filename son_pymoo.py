@@ -326,8 +326,8 @@ class MyCallback(Callback):
         self.n_gen_since_last_reset = 0
 
     def notify(self, algorithm: GeneticAlgorithm):
-        queue_filled = False
-        if self.running_mode == RunningMode.LIVE.value:
+
+        if self.running_mode == RunningMode.LIVE.value or self.running_mode == RunningMode.STATIC.value:
             # update counter
             self.n_gen_since_last_fetch += 1
             self.n_gen_since_last_reset += 1
@@ -463,7 +463,7 @@ def start_optimization(
                           pymoo_message_queue=pymoo_message_queue,
                           editor_message_queue=editor_message_queue, son=son_obj,
                           running_mode=running_mode))
-
+    total_gen = 0
     if running_mode == RunningMode.LIVE.value:
         # total_gen = result.algorithm.n_gen
         total_gen = 0
@@ -518,21 +518,9 @@ def start_optimization(
                     son=son_obj,
                     running_mode=running_mode, total_gen=total_gen))
 
-        # TODO look if the selection actually picks the solution from pareto front !!! does it use the right son object ?
-        activation_dict = select_solution(
-            son_obj,
-            decision_space=result.X,
-            objective_space=result.F)
-        pymoo_message_queue.put(
-            {"activation_dict": activation_dict,
-             "objective_space": result.F,
-             "finished": False,
-             "n_gen_since_last_fetch": 0,
-             "n_gen_since_last_reset": 0,
-             "n_gen": total_gen + result.algorithm.n_gen-1
-             })
 
     if running_mode == RunningMode.STATIC.value:
+        total_gen = 0
         designSpace = convert_decision_Space_pop_to_design_space_pop(son_obj, result.X, repair=False)
         objectiveSpace = result.F
         exec_time = result.exec_time
@@ -595,13 +583,22 @@ def start_optimization(
         with open(file_path, 'w', encoding="utf-8") as file:
             file.write(json_data)
 
-    pymoo_message_queue.put({"activation_dict": False,
-                             "objective_space": False,
-                             "finished": True,
-                             "n_gen_since_last_fetch": 0,
-                             "n_gen_since_last_reset": 0,
-                             "n_gen": -1
-                             })
+    
+    ## last messagef from pymoo after terminattion criteria is met fo both modes:
+    # TODO look if the selection actually picks the solution from pareto front !!! does it use the right son object ?
+    activation_dict = select_solution(
+        son_obj,
+        decision_space=result.X,
+        objective_space=result.F)
+    pymoo_message_queue.put(
+        {"activation_dict": activation_dict,
+            "objective_space": result.F,
+            "finished": True,
+            "n_gen_since_last_fetch": 0,
+            "n_gen_since_last_reset": 0,
+            "n_gen": total_gen + result.algorithm.n_gen-1
+            })
+
 
 
 if __name__ == "__main__":

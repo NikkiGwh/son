@@ -489,15 +489,12 @@ class Network_Simulation_State():
         self.optimization_running = False
         self.iterations += 1
         if self.running_mode == RunningMode.LIVE.value:
-            # self.optimization_process.terminate()
-            # self.optimization_process.join()
-            # self.optimization_process.close()
             self.save_objective_history_to_file()
 
         print("finished " + str(self.iterations) + " iteraiton")
                   
         self.reset_all_after_run()
-        if self.iterations < self.config_params["iterations"]:
+        if self.iterations < self.config_params["iterations"] and self.running_mode != RunningMode.STATIC.value:
             self.start_evo(self.current_config_name)
         else:
             if not self.script_mode:
@@ -543,12 +540,13 @@ class Network_Simulation_State():
             if self.iterations == -1:
                 self.start_evo(self.current_config_name)
 
-        if self.running_mode == RunningMode.LIVE.value and self.optimization_running:
-            
-            # if self.running_ticks % self.fps == 0 and self.running_ticks <= self.config_params["running_time_in_s"] * self.fps:
-            self.move_some_users()
-            # trigger evo_reset if current activation profile violates son topology and to adjust to movement changes
-            self.trigger_evo_reset_invalid_activation_profile()
+        if self.optimization_running:
+
+            if self.running_mode == RunningMode.LIVE.value:
+                # if self.running_ticks % self.fps == 0 and self.running_ticks <= self.config_params["running_time_in_s"] * self.fps:
+                self.move_some_users()
+                # trigger evo_reset if current activation profile violates son topology and to adjust to movement changes
+                self.trigger_evo_reset_invalid_activation_profile()
 
             if not self.config_params["use_greedy_assign"]:
 
@@ -576,6 +574,7 @@ class Network_Simulation_State():
 
                     self.activation = self.queue_flags["activation_dict"]
                     self.dt_since_last_activation_profile_fetch = 0
+                    print("activation")
 
                 if self.queue_flags["n_gen_since_last_fetch"] is not False:
                     self.n_gen_since_last_fetch = self.queue_flags["n_gen_since_last_fetch"]
@@ -602,15 +601,16 @@ class Network_Simulation_State():
                 self.son.find_activation_profile_greedy_user(update_attributes=True)
 
             
-            # update objectives every second
-            if self.running_ticks % self.fps == 0 and self.running_ticks <= self.config_params["running_time_in_s"] * self.fps:
-                self.update_objective_history()
+            if RunningMode.LIVE:
+                # update objectives every second
+                if self.running_ticks % self.fps == 0 and self.running_ticks <= self.config_params["running_time_in_s"] * self.fps:
+                    self.update_objective_history()
 
-            # stop if running time is exceeded
-            # if self.running_time_in_s >= self.config_params["running_time_in_s"]:
-            # stop if running time is over but time is translated into frames
-            if self.running_ticks == self.config_params["running_time_in_s"] * self.fps:
-                self.stop_evo()
+                # stop if running time is exceeded
+                # if self.running_time_in_s >= self.config_params["running_time_in_s"]:
+                # stop if running time is over but time is translated into frames
+                if self.running_ticks == self.config_params["running_time_in_s"] * self.fps:
+                    self.stop_evo()
             
             self.dt_since_last_history_update += dt
             self.ticks_since_last_history_update += 1
