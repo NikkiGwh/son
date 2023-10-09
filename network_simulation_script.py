@@ -319,28 +319,34 @@ class Network_Simulation_State():
         return True
     
     def generate_user_nodes(self, percentage: float):
+
+        user_node_id_list = [x[0] for x in self.son.graph.nodes.data() if x[1]["type"] == "cell"]
+        self.son.graph.remove_nodes_from(user_node_id_list)
         
-        for _, bs_node in enumerate(filter(self.son.filter_user_nodes, self.son.graph.nodes.data())):
-            bs_user_count = round(bs_node["antennas"]) * percentage / 100
+        for _, bs_node in enumerate(list(filter(self.son.filter_bs_nodes, self.son.graph.nodes.data()))):
+            bs_user_count = round(self.son.network_node_params[bs_node[1]["type"]]["antennas"] * percentage / 100)
             space_in_deg = 360 / bs_user_count
-            radius = self.son.get_bs_type_range(bs_node[1]["type"])
+            radius = self.son.get_bs_type_range(bs_node[1]["type"]) / 2
             radius_vec = np.array([0, radius])
            
             for counter in range(0, bs_user_count):
-                rotated_radius_vec = self.rotate_vector_by_deg(radius_vec, counter * space_in_deg)
+                rotated_radius_vec = self.rotate_vector_by_deg(radius_vec, counter * space_in_deg, False)
                 x_pos = bs_node[1]["pos_x"] + rotated_radius_vec[0]
                 y_pos = bs_node[1]["pos_y"] + rotated_radius_vec[1]
+
                 self.son.add_user_node((x_pos, y_pos),update_network=False)
 
-    def rotate_vector_by_deg(self, vec: np.ndarray, deg: int) -> np.ndarray:
+    def rotate_vector_by_deg(self, vec: np.ndarray, deg: float, normalize=True) -> np.ndarray:
         # rotate vector
         theta = np.deg2rad(deg)
         rot = np.array([[math.cos(theta), -math.sin(theta)], [math.sin(theta), math.cos(theta)]])
         v2 = np.dot(rot, vec)
 
         # normalize vector
-        vector_norm = v2 / np.linalg.norm(v2)
-        return vector_norm
+        if normalize:
+            v2 = v2 / np.linalg.norm(v2)
+        
+        return v2
 
     def move_some_users(self):
         if self.config_params["moving_speed"] == 0:
@@ -622,13 +628,11 @@ class Network_Simulation_State():
                 self.son.apply_activation_profile_greedy_user(update_attributes=True)
 
             
-            if RunningMode.LIVE:
+            if self.running_mode == RunningMode.LIVE.value:
                 # update objectives every second
                 if self.running_ticks % self.fps == 0 and self.running_ticks <= self.config_params["running_time_in_s"] * self.fps:
                     self.update_objective_history()
 
-                # stop if running time is exceeded
-                # if self.running_time_in_s >= self.config_params["running_time_in_s"]:
                 # stop if running time is over but time is translated into frames
                 if self.running_ticks == self.config_params["running_time_in_s"] * self.fps:
                     self.stop_evo()

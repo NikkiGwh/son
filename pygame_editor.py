@@ -277,11 +277,11 @@ class Editor():
         self.create_algo_param_ui_elements()
 
         self.create_live_param_ui_elements()
-
-    def apply_adjacencies_from_json_file(self, file_name):
-        layout_file_path = os.getcwd() + "/datastore/" + self.dropdown_menu_pick_network.selected_option + "/" + file_name
-        self.net_sim.son.load_graph_from_json_adjacency_file(layout_file_path, True)
-       
+   
+    def onpress_generate_user_nodes(self):
+        percentage = float(self.input_generate_user_nodes.get_text())
+        self.net_sim.generate_user_nodes(percentage)
+        self.update_network_info_lables()
 
     def on_entry_changed(self, event: pygame.event.Event):
 
@@ -525,7 +525,14 @@ class Editor():
             object_id="#apply_button",
             text="apply params", manager=self.manager,
             container=self.ui_container)
-
+       
+        self.generate_user_nodes_butotn = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
+            (320, 260),
+            (-1, 30)),
+            text="generate user nodes %", manager=self.manager,
+            container=self.ui_container)
+        self.input_generate_user_nodes = pygame_gui.elements.UITextEntryLine( pygame.Rect((520, 260), (40, 30)), self.manager, self.ui_container,initial_text= "100")
+        self.input_generate_user_nodes.set_allowed_characters(text_input_float_number_type_characters)
         # network params
 
         self.input_antennas_label = pygame_gui.elements.UILabel(pygame.Rect(
@@ -961,6 +968,8 @@ class Editor():
                         self.switch_algorithm_mode()
                     if event.ui_element == self.apply_ui_params_button:
                         self.onpress_apply_params_from_ui()
+                    if event.ui_element == self.generate_user_nodes_butotn:
+                        self.onpress_generate_user_nodes()
                     if event.ui_element == self.save_button:
                         self.onpress_save_network()
                     if event.ui_element == self.show_edges_toggle:

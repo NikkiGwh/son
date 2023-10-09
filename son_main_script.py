@@ -29,7 +29,7 @@ default_node_params = {
    "macro": {
     "type": "macro",
     "tx_power": 31.622776601683793,
-    "static_power": 4.0,
+    "static_power": 180,
     "standby_power": 2.0,
     "antennas": 8,
     "frequency": 13.0,
@@ -39,7 +39,7 @@ default_node_params = {
   "micro": {
     "type": "micro",
     "tx_power": 3.162277660168379,
-    "static_power": 1.5,
+    "static_power": 80,
     "standby_power": 0.75,
     "antennas": 3,
     "frequency": 10.0,
