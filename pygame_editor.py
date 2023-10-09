@@ -53,7 +53,7 @@ class Editor():
         self.clock = pygame.time.Clock()
         self.net_sim = net_sim
         self.net_sim.AddSubscribersForFinishedEvent(self.on_optimization_finished_callback)
-        self.one_fps_sim_mode = False
+        self.one_fps_sim_mode = True
 
         # networkx 1 = 1m I want max 10 km -> 0.1 on screen equals 1 m
         self.unit_size_x, self.unit_size_y = (

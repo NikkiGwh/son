@@ -356,7 +356,7 @@ class MyCallback(Callback):
                     ##### react to reset #####
                     self.data["external_reset"] = True
                     self.data["graph"] = queue_obj["graph"]
-                    self.n_gen_since_last_reset
+                    self.n_gen_since_last_reset = 0
                     algorithm.termination.terminate()
 
 
@@ -373,6 +373,7 @@ class MyCallback(Callback):
                 {"activation_dict": activation_dict,
                     "objective_space": algorithm.pop.get("F"),
                     "finished": False,
+                    "just_resetted": True if self.n_gen_since_last_reset == 0 else False,
                     "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
                     "n_gen_since_last_reset": self.n_gen_since_last_reset,
                     "n_gen": algorithm.n_gen + self.total_gen
@@ -612,6 +613,7 @@ def start_optimization(
             "finished": True,
             "n_gen_since_last_fetch": 0,
             "n_gen_since_last_reset": 0,
+            "just_resetted": False,
             "n_gen": total_gen + result.algorithm.n_gen-1
             })
 

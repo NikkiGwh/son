@@ -78,6 +78,7 @@ class Son:
 
         # this is -80 dbm
         self.min_rssi = 1.0000000000000001e-11
+        self.max_cos = math.cos(math.pi / 4)
         self.network_node_params = default_node_params
         # initialize network
         self.graph = nx.Graph()
@@ -371,7 +372,7 @@ class Son:
         optimal_beam_vector = self.get_directional_vec(user_id, beam[1])
         cos_beta = 1 if beam[0] == user_id else self.vec_cos(beam_vector, optimal_beam_vector)
         bs_type = self.graph.nodes[beam[1]]["type"]
-        if cos_beta <= 0 or cos_beta > 1:
+        if cos_beta <= 0 or cos_beta > self.max_cos and beam[0] != user_id :
             return 0
         wave_length = self.network_node_params[bs_type]["wave_length"]
         transmission_power = self.network_node_params[bs_type]["tx_power"]
@@ -381,11 +382,17 @@ class Son:
             (self.graph.nodes.data()[beam[1]]["pos_x"],
              self.graph.nodes.data()[beam[1]]["pos_y"]))
         if distance == 0:
+            # beacuse otherwise programm crashes if user is exactly on topof bs station
             return 0
         else:
-            result_rssi = transmission_power * cos_beta * \
-                math.pow((wave_length / (4*math.pi*distance)), 2)
+            result_rssi = transmission_power * cos_beta * math.pow((wave_length / (4*math.pi*distance)), 2)
         return result_rssi
+    
+    def get_bs_type_range(self, bs_type: str):
+        wave_length = self.network_node_params[bs_type]["wave_length"]
+        transmission_power = self.network_node_params[bs_type]["tx_power"]
+
+        return wave_length / (4 * math.pi * (math.sqrt(self.min_rssi / transmission_power)))
 
     def get_euclidean_distance(self, pos1: tuple[float, float], pos2: tuple[float, float]):
         return math.dist(pos1, pos2)

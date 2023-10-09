@@ -42,7 +42,7 @@ default_algorithm_param_config = {
 } | default_node_params
 
 class Network_Simulation_State():
-    def __init__(self, graph: Son, script_mode=False, network_name="", config_name="", fps = 30) -> None:
+    def __init__(self, graph: Son, script_mode=False, network_name="", config_name="", fps = 1) -> None:
         self.script_mode = script_mode
         self.fps = fps
         self.optimization_process = multiprocessing.Process()
@@ -56,6 +56,7 @@ class Network_Simulation_State():
         self.dt_since_last_activation_profile_fetch = 0
         self.n_gen_since_last_fetch = 0
         self.ngen_total = 0
+        self.pymoo_is_reset_ready = True
         self.dt_since_last_evo_reset = 0
         self.objective_history = []
         self.ngen_since_last_evo_reset = 0
@@ -65,6 +66,7 @@ class Network_Simulation_State():
         self.moving_users = {}
         self.show_moving_users = False
         self.queue_flags = {"activation_dict": False, "objective_space": False,
+                            "just_resetted": False,
                             "n_gen_since_last_fetch": 0, "n_gen": 0,
                             "n_gen_since_last_reset": 0}
         self.pymoo_message_queue = multiprocessing.Queue()
@@ -225,7 +227,7 @@ class Network_Simulation_State():
         else:
             self.moving_users = {}
     
-    ########### methods related to save stuff to files
+    ########### methods related to saving stuff to files
     def save_new_moving_selection(self, name: str):
         if name == "":
             return ErrorEnum.NAME_MISSING.value
@@ -315,6 +317,20 @@ class Network_Simulation_State():
             self.moving_users[selection_list[index]] = (v[0], v[1])
         
         return True
+    
+    def generate_user_nodes(self, percentage: float):
+        
+        for _, bs_node in enumerate(filter(self.son.filter_user_nodes, self.son.graph.nodes.data())):
+            bs_user_count = round(bs_node["antennas"]) * percentage / 100
+            space_in_deg = 360 / bs_user_count
+            radius = self.son.get_bs_type_range(bs_node[1]["type"])
+            radius_vec = np.array([0, radius])
+           
+            for counter in range(0, bs_user_count):
+                rotated_radius_vec = self.rotate_vector_by_deg(radius_vec, counter * space_in_deg)
+                x_pos = bs_node[1]["pos_x"] + rotated_radius_vec[0]
+                y_pos = bs_node[1]["pos_y"] + rotated_radius_vec[1]
+                self.son.add_user_node((x_pos, y_pos),update_network=False)
 
     def rotate_vector_by_deg(self, vec: np.ndarray, deg: int) -> np.ndarray:
         # rotate vector
@@ -402,8 +418,8 @@ class Network_Simulation_State():
     def trigger_evo_reset_invalid_activation_profile(self):
         # invoke evo_reset if threshhold is met
         correction_factor = 1 if self.fps == 30 else 2
-        if self.ngen_since_last_evo_reset == self.config_params["reset_rate_in_ngen"]-correction_factor:
 
+        if self.ngen_since_last_evo_reset >= self.config_params["reset_rate_in_ngen"]-correction_factor and self.pymoo_is_reset_ready:
             # check if current activation profile is valid
             # or someone has moved since last call
             if self.topology_changed:
@@ -424,6 +440,7 @@ class Network_Simulation_State():
                       "node_dic_with_attributes": node_dic_with_attributes
                       },
                      "reset": True})
+                self.pymoo_is_reset_ready = False
     
     def stop_evo(self):
         self.editor_message_queue.put(
@@ -502,6 +519,7 @@ class Network_Simulation_State():
 
     def reset_queue_flags(self):
         self.queue_flags = {"activation_dict": False, "objective_space": False,
+                            "just_resetted": False,
                             "n_gen_since_last_fetch": 0, "n_gen": 0,
                             "n_gen_since_last_reset": 0}
 
@@ -556,7 +574,7 @@ class Network_Simulation_State():
                     if callback_obj["finished"] == True:
                         # update dropdowns after normal completion and static mode
                         self.finished = True
-
+                    
                     if callback_obj["activation_dict"] is not False and callback_obj["objective_space"] is not False:
                         self.queue_flags["activation_dict"] = callback_obj["activation_dict"]
                         self.queue_flags["objective_space"] = callback_obj["objective_space"]
@@ -567,6 +585,7 @@ class Network_Simulation_State():
                     self.ngen_total = callback_obj["n_gen"]
 
                     self.queue_flags["n_gen_since_last_reset"] = callback_obj["n_gen_since_last_reset"]
+                    self.queue_flags["just_resetted"] = callback_obj["just_resetted"]
 
                 # react to queue messages
                 if self.queue_flags["activation_dict"] is not False and self.queue_flags["objective_space"] is not False:
@@ -576,6 +595,10 @@ class Network_Simulation_State():
 
                 if self.queue_flags["n_gen_since_last_fetch"] is not False:
                     self.n_gen_since_last_fetch = self.queue_flags["n_gen_since_last_fetch"]
+
+                if self.queue_flags["just_resetted"]:
+                    self.pymoo_is_reset_ready = True
+
 
                 self.ngen_since_last_evo_reset = self.queue_flags["n_gen_since_last_reset"]
                 # reset queue_flags
