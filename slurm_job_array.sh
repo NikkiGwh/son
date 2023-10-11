@@ -4,9 +4,9 @@
 #SBATCH --output=Array_test.%A_%a.log
 #SBATCH --partition=all
 #SBATCH --nodes=1-5 --ntasks=1
-#SBATCH --mem-per-cpu=8G
+#SBATCH --mem-per-cpu=16G
 #SBATCH --array=0-3
-#SBATCH --cpus-per-task=2
+#SBATCH --cpus-per-task=4
 # 1440
 
 # . /data/spack/share/spack/setup-env.sh
