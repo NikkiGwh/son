@@ -1,0 +1,13 @@
+Bootstrap: docker
+From: python:3.11
+
+%files
+    pip-requirements.txt
+
+%post
+    pip install -r pip-requirements.txt
+    pip uninstall pymoo -y
+    pip install https://github.com/anyoptimization/pymoo/archive/refs/tags/0.6.0.1.tar.gz -vv
+
+%runscript
+    python network_simulation_script.py hetNet2 hetNet2_predefined_70_greedy
