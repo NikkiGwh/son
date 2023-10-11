@@ -1,15 +1,12 @@
 #!/bin/bash
 #
-#SBATCH --job-name=naturalsi
-#SBATCH --output=logs/Array_test.%A_%a.log
-#SBATCH --partition=ci
+#SBATCH --job-name=nns
+#SBATCH --output=Array_test.%A_%a.log
+#SBATCH --partition=all
 #SBATCH --nodes=1-5 --ntasks=1
-#SBATCH --mem-per-cpu=2500
-#SBATCH --array=0-71
-#SBATCH --nodelist=ant6,ant7
-#SBATCH --exclude=ant1,ant10
-# SBATCH --array=[0-4] -n4 -N4 --cpus-per-task=4
-
+#SBATCH --mem-per-cpu=8G
+#SBATCH --array=0-3
+#SBATCH --cpus-per-task=2
 # 1440
 
 # . /data/spack/share/spack/setup-env.sh
@@ -19,10 +16,10 @@ experimentName=sonNiklas
 # declare -a combinations
 declare -a configNames
 
-configNames[0] = "hetNet2_predefined_70_greedy"
-configNames[1] = "hetNet2_predefined_70_greedy1"
-configNames[2] = "hetNet2_predefined_70_greedy2"
-configNames[3] = "hetNet2_predefined_70_greedy3"
+configNames[0]="hetNet2_predefined_70_greedy"
+configNames[1]="hetNet2_predefined_70_greedy1"
+configNames[2]="hetNet2_predefined_70_greedy2"
+configNames[3]="hetNet2_predefined_70_greedy3"
 
 # index=0
 # b=0
@@ -61,8 +58,9 @@ configNames[3] = "hetNet2_predefined_70_greedy3"
 srun hostname
 srun nproc
 # echo ${experimentName}FRD${alg}${dm}${k}${obs}${ms}${ele}${back}EXSTARTED
-echo ${configNames[SLURM_ARRAY_TASK_ID]} started
+
+echo ${configNames[${SLURM_ARRAY_TASK_ID}]} started
 # java -jar morp-benchmark-suite-1.0.0-SNAPSHOT.one-jar.jar -ex $experimentName -kn $k -ms $ms -ele $ele -o $obs ${back} -p 100 -g 200 -n NSGAIIDMS${alg}${dm} -pnm ${alg} -dm ${dm} -df EUCLID -inter -ir 31
-srun apptainer exec nns.sif network_simulation_script.py hetNet2 ${configNames[SLURM_ARRAY_TASK_ID]}
-# echo ${experimentName}FRD${alg}${dm}${k}${obs}${ms}${ele}${back}EXENDED
-echo${configNames[SLURM_ARRAY_TASK_ID]} finished
+srun apptainer exec nns.sif python network_simulation_script.py hetNet2 ${configNames[${SLURM_ARRAY_TASK_ID}]}
+echo ${experimentName}FRD${alg}${dm}${k}${obs}${ms}${ele}${back}EXENDED
+echo ${configNames[${SLURM_ARRAY_TASK_ID}]} finished
