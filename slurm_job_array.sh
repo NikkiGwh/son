@@ -16,10 +16,10 @@ experimentName=sonNiklas
 # declare -a combinations
 declare -a configNames
 
-configNames[0]="hetNet2_predefined_70_greedy"
-configNames[1]="hetNet2_predefined_70_greedy1"
-configNames[2]="hetNet2_predefined_70_greedy2"
-configNames[3]="hetNet2_predefined_70_greedy3"
+configNames[0]="hetNet2_predefined_70_resetting_15_0"
+configNames[1]="hetNet2_predefined_70_resetting_15_1"
+configNames[2]="hetNet2_predefined_70_resetting_15_2"
+configNames[3]="hetNet2_predefined_70_resetting_15_3"
 
 # index=0
 # b=0
