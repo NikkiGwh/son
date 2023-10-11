@@ -78,13 +78,15 @@ class Network_Simulation_State():
         self.current_network_name = network_name
         self.current_config_name = config_name
         self.onFinishedEvent = Event()
-        # auto mode
+        # script mode
         if script_mode:
             # load network graph
             self.load_current_adjacencies()
 
             # load param config from predefined folder
             self.load_param_config_from_file("predefined_configs/" + config_name + ".json")
+            # load moving selections
+            self.load_current_moving_selection()
 
             # set iterations to -1 so that optimiaztion starts itself
             self.iterations = -1
@@ -350,6 +352,7 @@ class Network_Simulation_State():
 
     def move_some_users(self):
         if self.config_params["moving_speed"] == 0:
+
             self.topology_changed = False
             return
         else:
@@ -361,7 +364,6 @@ class Network_Simulation_State():
         self.son.initialize_edges()
 
     def move_one_user(self, user_node_id: str):
-
         # TODO make it performant
         self.update_direction_for_user(user_node_id)
 

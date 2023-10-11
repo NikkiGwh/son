@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #SBATCH --job-name=nns
-#SBATCH --output=Array_test.%A_%a.log
+#SBATCH --output=log/Array_test.%A_%a.log
 #SBATCH --partition=all
 #SBATCH --nodes=1-5 --ntasks=1
 #SBATCH --mem-per-cpu=16G
@@ -19,7 +19,7 @@ declare -a configNames
 configNames[0]="hetNet2_predefined_70_resetting_15_0"
 configNames[1]="hetNet2_predefined_70_resetting_15_1"
 configNames[2]="hetNet2_predefined_70_resetting_15_2"
-configNames[3]="hetNet2_predefined_70_resetting_15_3"
+configNames[3]="greedy_script_cluster"
 
 # index=0
 # b=0
