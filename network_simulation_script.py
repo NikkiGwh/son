@@ -20,7 +20,7 @@ class ErrorEnum(Enum):
     NAME_ALREADY_EXISTS = "NAME_ALREADY_EXISTS"
     MOVING_SELECTION_EMPTY = "MOVING_SELECTION_EMPTY"
 
-default_algorithm_param_config = {
+default_simulation_params = {
     "pop_size": 200,
     "n_offsprings": 40,
     "n_generations": 100,
@@ -28,7 +28,7 @@ default_algorithm_param_config = {
     "sampling": SamplingEnum.HIGH_RSSI_FIRST_SAMPLING.value,
     "crossover": CrossoverEnum.UNIFORM_CROSSOVER.value,
     "mutation": MutationEnum.PM_MUTATION.value,
-    "eliminate_duplicates": "True",
+    "eliminate_duplicates": True,
     "objectives": [ObjectiveEnum.AVG_DL_RATE.value, ObjectiveEnum.POWER_CONSUMPTION.value],
     "algorithm": AlgorithmEnum.NSGA2.value,
     "moving_speed": 28.0,
@@ -42,12 +42,14 @@ default_algorithm_param_config = {
 } | default_node_params
 
 class Network_Simulation_State():
-    def __init__(self, graph: Son, script_mode=False, network_name="", config_name="", fps = 1) -> None:
+    def __init__(self, graph: Son, script_mode=False, network_name="", script_config_name="", evo_only_config_path="", fps = 1) -> None:
         self.script_mode = script_mode
         self.fps = fps
         self.optimization_process = multiprocessing.Process()
-        self.config_params = default_algorithm_param_config
+        self.config_params = default_simulation_params
         self.running_mode = RunningMode.LIVE.value
+        self.current_config_name = ""
+        self.current_network_name = ""
         self.finished = False
         self.topology_changed = False
         self.dt_since_last_history_update = 0
@@ -74,24 +76,32 @@ class Network_Simulation_State():
 
         self.son = graph
         self.activation = {}
-       
-        self.current_network_name = network_name
-        self.current_config_name = config_name
         self.onFinishedEvent = Event()
-        # script mode
-        if script_mode:
+
+        if network_name != "":
+            self.current_network_name = network_name
             # load network graph
             self.load_current_adjacencies()
+        
+            if evo_only_config_path != "":
+                # load param config from predefined folder
+                self.load_evo_only_param_config_from_file(evo_only_config_path)
+                # load moving selections
+                self.load_current_moving_selection()
+            
+            if script_mode:
+                if script_config_name != "":
+                    # load param config script config folder
+                    self.current_config_name = script_config_name
+                    self.load_param_config_from_file("predefined_configs/" + script_config_name + ".json")
+                    # load moving selections
+                    self.load_current_moving_selection()
 
-            # load param config from predefined folder
-            self.load_param_config_from_file("predefined_configs/" + config_name + ".json")
-            # load moving selections
-            self.load_current_moving_selection()
+                # set iterations to -1 so that optimiaztion starts itself
+                self.iterations = -1
+                # start optimization -> happens in running_method
+                # terminate all processes -> in optimization_finished
 
-            # set iterations to -1 so that optimiaztion starts itself
-            self.iterations = -1
-            # start optimization -> happens in running_method
-            # terminate all processes -> in optimization_finished
     
     ####### event hanlder methods
     def AddSubscribersForFinishedEvent(self,objMethod):
@@ -204,6 +214,15 @@ class Network_Simulation_State():
                 # apply network params
                 self.apply_current_network_params_to_graph()
     
+    def load_evo_only_param_config_from_file(self, file_path: str):
+        # load param config
+        with open(file_path, 'r', encoding="utf-8") as openfile:
+                # Reading params from json file
+                evo_config = json.load(openfile)
+                self.config_params = default_simulation_params | evo_config
+                # apply network params
+                self.apply_current_network_params_to_graph()
+    
     def load_result_ind_from_file(self, name: str):
         if name != "from file":
             self.son.load_graph_from_json_adjacency_file(self.get_current_config_directory() + name + ".json", True)
@@ -212,7 +231,7 @@ class Network_Simulation_State():
         if bool(self.config_params):
             self.son.apply_network_node_attributes(self.config_params)
         else:
-            self.son.apply_network_node_attributes(default_algorithm_param_config)
+            self.son.apply_network_node_attributes(default_simulation_params)
    
     def load_current_adjacencies(self):
         # List all files and directories in the current directory
@@ -275,7 +294,7 @@ class Network_Simulation_State():
         self.current_network_name = new_network_name
         
         ## load default param config for new network
-        self.config_params = default_algorithm_param_config
+        self.config_params = default_simulation_params
         self.apply_current_network_params_to_graph()
         
         return ""
@@ -427,16 +446,32 @@ class Network_Simulation_State():
     ######## live running methods
     ### TODO make it dynamic accoridng to objective selection 
     def update_objective_history(self):
-        # current_total_energy_efficiency = self.son.get_total_energy_efficiency()
-        # current_avg_energy_efficiency = self.son.get_avg_energy_efficiency()
-        current_avg_energy_efficiency = self.son.get_total_energy_consumption()
-        current_avg_dl_datarate = self.son.get_average_dl_datarate()
+        measurements_object = []
+
         current_avg_user_degree = self.son.get_average_userNode_degree()
+        measurements_object.append(round(self.running_time_in_s, 2))
+        measurements_object.append(self.running_ticks)
+        measurements_object.append(current_avg_user_degree)
+        measurements_object.append(self.ngen_total)
 
-        self.objective_history.append(
-            (round(self.running_time_in_s, 2),
-             self.running_ticks, current_avg_energy_efficiency, current_avg_dl_datarate, current_avg_user_degree, self.ngen_total))
-
+        if ObjectiveEnum.AVG_DL_RATE.value in self.config_params["objectives"]:
+            measurements_object.append(self.son.get_average_dl_datarate())
+        if ObjectiveEnum.POWER_CONSUMPTION.value in self.config_params["objectives"]:
+            measurements_object.append(self.son.get_total_energy_consumption())
+        if ObjectiveEnum.AVG_ENERGY_EFFICENCY.value in self.config_params["objectives"]:
+            measurements_object.append(self.son.get_avg_energy_efficiency())
+        if ObjectiveEnum.TOTAL_ENERGY_EFFICIENCY.value in self.config_params["objectives"]:
+            measurements_object.append(self.son.get_total_energy_consumption())
+        if ObjectiveEnum.AVG_LOAD.value in self.config_params["objectives"]:
+            measurements_object.append(self.son.get_average_network_load())
+        if ObjectiveEnum.AVG_RSSI.value in self.config_params["objectives"]:
+            measurements_object.append(self.son.get_average_rssi())
+        if ObjectiveEnum.AVG_SINR.value in self.config_params["objectives"]:
+            measurements_object.append(self.son.get_average_sinr())
+        if ObjectiveEnum.OVERLOAD.value in self.config_params["objectives"]:
+            measurements_object.append(self.son.get_avg_overlad())
+        
+        self.objective_history.append(measurements_object)
         self.dt_since_last_history_update = 0
         self.ticks_since_last_history_update = 0
 
@@ -509,7 +544,7 @@ class Network_Simulation_State():
                 self.config_params["sampling"],
                 self.config_params["crossover"],
                 self.config_params["mutation"],
-                self.config_params["eliminate_duplicates"] == "True",
+                self.config_params["eliminate_duplicates"],
                 self.config_params["objectives"],
                 self.config_params["algorithm"],
                 self.son,
@@ -669,7 +704,7 @@ if __name__ == "__main__":
     config_name = sys.argv[2]
     son = Son()
     fps = 1
-    simulation = Network_Simulation_State(son, script_mode=True, network_name=network_name, config_name=config_name, fps=fps)
+    simulation = Network_Simulation_State(son, script_mode=True, network_name=network_name, script_config_name=config_name, fps=fps)
     
     dt = 1
     while(simulation.iterations < simulation.config_params["iterations"]):

@@ -117,7 +117,7 @@ def convert_decision_Space_pop_to_design_space_pop(
 
 
 def select_solution(son: Son, decision_space, objective_space: np.ndarray,
-                    weights: np.ndarray = np.array([0.5, 0.5])):
+                    weights= []):
     '''Picks one solution with ASF and given weighting
 
     Keyword arguments:
@@ -129,8 +129,6 @@ def select_solution(son: Son, decision_space, objective_space: np.ndarray,
     weights -- of type numpy array (list[list[float]]), summing up to 1,
     vector of length equal to len(objective_space)
     '''
-
-    # TODO check if picked solution is from pareto front
     approx_ideal = objective_space.min(axis=0)
     approx_nadir = objective_space.max(axis=0)
 
@@ -138,7 +136,14 @@ def select_solution(son: Son, decision_space, objective_space: np.ndarray,
     np.seterr(divide='ignore', invalid='ignore')
     nF = (objective_space - approx_ideal) / (approx_nadir - approx_ideal)
     decomp = ASF()
-    i = decomp.do(nF, 1/weights).argmin()
+
+    if len(weights) != objective_space.shape[1]:
+        weights = [1/objective_space.shape[1] for _ in range(objective_space.shape[1])]
+
+    weights_np= np.array(weights)
+
+    i = decomp.do(nF, 1/weights_np).argmin()
+    print(weights_np)
 
     design_space_ind = convert_decision_space_ind_to_design_space_ind(son, decision_space[i])
     return design_space_ind

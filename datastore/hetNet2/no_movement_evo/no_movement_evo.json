@@ -6,7 +6,7 @@
   "sampling": "SON_RANDOM_SAMPLING",
   "crossover": "UNIFORM_CROSSOVER",
   "mutation": "PM_MUTATION",
-  "eliminate_duplicates": "True",
+  "eliminate_duplicates": true,
   "objectives": ["AVG_DL_RATE", "AVG_ENERGY_EFFICIENCY"],
   "algorithm": "NSGA2",
   "moving_speed": 0.0,

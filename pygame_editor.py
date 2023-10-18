@@ -5,7 +5,7 @@ import pygame_gui
 import os
 import cProfile
 import re
-from network_simulation_script import ErrorEnum, Network_Simulation_State, default_algorithm_param_config
+from network_simulation_script import ErrorEnum, Network_Simulation_State, default_simulation_params
 from pygame_settings import *
 from son_main_script import NodeType, Son
 from son_pymoo import AlgorithmEnum, CrossoverEnum, MutationEnum, ObjectiveEnum, RunningMode, SamplingEnum
@@ -88,7 +88,8 @@ class Editor():
 
         # live config elements
         self.create_live_param_ui_elements()
-        self.ui_container_live_config.disable()
+        if self.net_sim.current_network_name == "":
+            self.ui_container_live_config.disable()
 
     def disable_ui(self):
         self.ui_container.disable()
@@ -326,7 +327,7 @@ class Editor():
 
     def on_dropdown_pick_network_changed(self, event: pygame.event.Event):
         # reset config params to default
-        self.net_sim.config_params = default_algorithm_param_config
+        self.net_sim.config_params = default_simulation_params
         self.net_sim.current_config_name = ""
        
         if event.text != "from file":
@@ -352,7 +353,10 @@ class Editor():
         self.update_network_info_lables()
 
     def on_dropdown_input_algorithm_config_changed(self, event: pygame.event.Event, param_key: str):
-        self.net_sim.config_params[param_key] = event.text
+        if param_key == "eliminate_duplicates":
+            self.net_sim.config_params[param_key] = True if event.text == "True" else False
+        else:
+            self.net_sim.config_params[param_key] = event.text
 
     def on_selectionlist_input_objectives_changed(self, event: pygame.event.Event):
         self.net_sim.config_params["objectives"] = self.input_objectives.get_multi_selection()
@@ -367,7 +371,7 @@ class Editor():
             self.dropdown_pick_result.disable()
             
             self.net_sim.current_config_name = ""
-            self.net_sim.config_params = default_algorithm_param_config
+            self.net_sim.config_params = default_simulation_params
         else:
             self.net_sim.current_config_name = event.text
             self.net_sim.load_param_config_from_file(self.net_sim.get_current_config_directory() + event.text + ".json")
@@ -1032,6 +1036,7 @@ class Editor():
 
 if __name__ == "__main__":
     son = Son()
+    # main = Editor(Network_Simulation_State(son,script_mode=False, network_name="hetNet2", evo_only_config_path="./evo_only_config.json"))
     main = Editor(Network_Simulation_State(son,script_mode=False))
     main.run()
     # cProfile.run("main.run()", sort="tottime")
