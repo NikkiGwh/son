@@ -27,44 +27,44 @@ class NodeType(Enum):
 
 default_node_params = {
    "macro": {
-    "type": "macro",
-    "tx_power": 31.622776601683793,
-    "static_power": 180,
-    "standby_power": 2.0,
-    "antennas": 8,
-    "frequency": 13.0,
-    "wave_length": 0.02306095830769231,
-    "channel_bandwidth": 10
+       "type": "macro",
+       "tx_power": 31.622776601683793, # in Watts
+       "static_power": 450, # in Watts
+       "standby_power": 0,
+       "antennas": 16,
+       "frequency": 8.0, # in GHZ
+       "wave_length": 0.03747406, # in m
+       "channel_bandwidth": 100000 # in HZ
   },
   "micro": {
-    "type": "micro",
-    "tx_power": 3.162277660168379,
-    "static_power": 80,
-    "standby_power": 0.75,
-    "antennas": 3,
-    "frequency": 10.0,
-    "wave_length": 0.029979245800000002,
-    "channel_bandwidth": 10
+        "type": "micro",
+        "tx_power": 31.622776601683793,
+        "static_power": 100,
+        "standby_power": 0,
+        "antennas": 4,
+        "frequency": 20,
+        "wave_length": 0.01498962,
+        "channel_bandwidth": 400000
   },
   "femto": {
-    "type": "femto",
-    "tx_power": 0.1,
-    "static_power": 4.0,
-    "standby_power": 0,
-    "antennas": 4,
-    "frequency": 100,
-    "wave_length": 0.00299792,
-    "channel_bandwidth": 10
+        "type": "micro",
+        "tx_power": 31.622776601683793,
+        "static_power": 100,
+        "standby_power": 0,
+        "antennas": 4,
+        "frequency": 20,
+        "wave_length": 0.01498962,
+        "channel_bandwidth": 400000
   },
   "pico": {
-    "type": "pico",
-    "tx_power": 0.25118864315095796,
-    "static_power": 4.0,
-    "standby_power": 0,
-    "antennas": 4,
-    "frequency": 100,
-    "wave_length": 0.00299792,
-    "channel_bandwidth": 10
+         "type": "micro",
+        "tx_power": 31.622776601683793,
+        "static_power": 100,
+        "standby_power": 0,
+        "antennas": 4,
+        "frequency": 20,
+        "wave_length": 0.01498962,
+        "channel_bandwidth": 400000
   },
     "cell": {
         "type": "cell",

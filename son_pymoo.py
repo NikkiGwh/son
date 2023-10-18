@@ -157,7 +157,6 @@ class SonProblemElementWise(ElementwiseProblem):
         new_graph: nx.Graph = nx.from_edgelist(edge_list_with_attributes)
         nx.set_node_attributes(new_graph, node_dic_with_attributes)
         self.son_original.graph = new_graph
-
         self.possible_activation_dict: dict[str, list[str]
                                             ] = self.son_original.get_possible_activations_dict()
 
@@ -238,6 +237,7 @@ class SonRandomSampling(Sampling):
         for i in range(n_samples):
             for j in range(problem.n_var):
                 X[i][j] = np.random.randint(problem.xl[j], problem.xu[j]+1)
+
         return X
 class HighRssiFirstSampling(Sampling):
     def _do(self, problem: SonProblemElementWise, n_samples, **kwargs):

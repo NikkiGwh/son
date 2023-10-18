@@ -294,7 +294,8 @@ class Editor():
         if event.ui_element == self.input_antennas:
             self.net_sim.config_params[self.right_mouse_action]["antennas"] = float(event.text)
         if event.ui_element == self.input_channel_bandwidth:
-            self.net_sim.config_params[self.right_mouse_action]["bandwidth"] = float(event.text)
+            channel_bandwidth_in_HZ = self.net_sim.mhz_to_hz(float(event.text))
+            self.net_sim.config_params[self.right_mouse_action]["channel_bandwidth"] = channel_bandwidth_in_HZ
         if event.ui_element == self.input_frequency:
             self.net_sim.config_params[self.right_mouse_action]["frequency"] = float(event.text)
             if float(event.text) > 0:
@@ -562,10 +563,10 @@ class Editor():
         self.update_network_info_lables()
 
         self.input_channel_bandwidth_label = pygame_gui.elements.UILabel(pygame.Rect(
-            (20, 110), (-1, 30)), "channel bandwidth in HZ", self.manager, self.ui_container)
+            (20, 110), (-1, 30)), "channel bandwidth in MHZ", self.manager, self.ui_container)
         self.input_channel_bandwidth = pygame_gui.elements.UITextEntryLine(pygame.Rect(
             (220, 110), (100, 30)), self.manager, self.ui_container, placeholder_text="bandwidth",
-            initial_text=str(self.net_sim.config_params[initial_nodeType]["channel_bandwidth"]))
+            initial_text=str(self.net_sim.hz_to_mhz(self.net_sim.config_params[initial_nodeType]["channel_bandwidth"])))
         self.input_channel_bandwidth.set_allowed_characters(text_input_float_number_type_characters)
 
         self.input_transmission_power_label = pygame_gui.elements.UILabel(pygame.Rect(
@@ -764,7 +765,7 @@ class Editor():
 
             self.input_channel_bandwidth.enable()
             self.input_channel_bandwidth.set_text(
-                str(self.net_sim.config_params[self.right_mouse_action]["channel_bandwidth"]))
+                str(self.net_sim.hz_to_mhz(self.net_sim.config_params[self.right_mouse_action]["channel_bandwidth"])))
 
             self.input_frequency.enable()
             self.input_frequency.set_text(

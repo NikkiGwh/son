@@ -25,17 +25,17 @@ default_algorithm_param_config = {
     "n_offsprings": 40,
     "n_generations": 100,
     "termination": "",
-    "sampling": SamplingEnum.SON_RANDOM_SAMPLING.value,
+    "sampling": SamplingEnum.HIGH_RSSI_FIRST_SAMPLING.value,
     "crossover": CrossoverEnum.UNIFORM_CROSSOVER.value,
     "mutation": MutationEnum.PM_MUTATION.value,
     "eliminate_duplicates": "True",
-    "objectives": [ObjectiveEnum.AVG_DL_RATE.value, ObjectiveEnum.AVG_ENERGY_EFFICENCY.value],
+    "objectives": [ObjectiveEnum.AVG_DL_RATE.value, ObjectiveEnum.POWER_CONSUMPTION.value],
     "algorithm": AlgorithmEnum.NSGA2.value,
     "moving_speed": 28.0,
-    "reset_rate_in_ngen": 5,
+    "reset_rate_in_ngen": 15,
     "moving_selection_percent": 30,
     "running_time_in_s": 120,
-    "iterations": 10,
+    "iterations": 1,
     "greedy_to_moving": False,
     "use_greedy_assign": False,
     "moving_selection_name": ""
@@ -122,6 +122,13 @@ class Network_Simulation_State():
     def ghz_to_wave_length_m(self, frequency: float):
 
         return speed_of_light / frequency / 1000000000
+    
+    def hz_to_mhz(self, frequcnecy):
+        return frequcnecy / 1000
+    
+    def mhz_to_hz(self, frequency):
+        return frequency * 1000
+
     
     ######## get folder directories and list of filenames etc
     def get_current_network_directory(self):
@@ -336,6 +343,15 @@ class Network_Simulation_State():
                 x_pos = bs_node[1]["pos_x"] + rotated_radius_vec[0]
                 y_pos = bs_node[1]["pos_y"] + rotated_radius_vec[1]
 
+                if x_pos > 10000:
+                    x_pos = 10000
+                if x_pos < 0:
+                    x_pos = 0
+                if y_pos > 10000:
+                    y_pos = 10000
+                if y_pos < 0:
+                    y_pos = 0
+
                 self.son.add_user_node((x_pos, y_pos),update_network=False)
 
     def rotate_vector_by_deg(self, vec: np.ndarray, deg: float, normalize=True) -> np.ndarray:
@@ -412,7 +428,8 @@ class Network_Simulation_State():
     ### TODO make it dynamic accoridng to objective selection 
     def update_objective_history(self):
         # current_total_energy_efficiency = self.son.get_total_energy_efficiency()
-        current_avg_energy_efficiency = self.son.get_avg_energy_efficiency()
+        # current_avg_energy_efficiency = self.son.get_avg_energy_efficiency()
+        current_avg_energy_efficiency = self.son.get_total_energy_consumption()
         current_avg_dl_datarate = self.son.get_average_dl_datarate()
         current_avg_user_degree = self.son.get_average_userNode_degree()
 
@@ -559,14 +576,12 @@ class Network_Simulation_State():
             self.pymoo_message_queue.get()
 
     def step_one_tick(self, dt):
-
         if self.script_mode:
             # start evo
             if self.iterations == -1:
                 self.start_evo(self.current_config_name)
 
         if self.optimization_running:
-
             if self.running_mode == RunningMode.LIVE.value:
                 # if self.running_ticks % self.fps == 0 and self.running_ticks <= self.config_params["running_time_in_s"] * self.fps:
                 self.move_some_users()
