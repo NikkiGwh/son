@@ -1,0 +1,11 @@
+{
+  "pop_size": 5555,
+  "n_offsprings": 55,
+  "n_generations": 55555555,
+  "termination": "",
+  "sampling": "HIGH_RSSI_FIRST_SAMPLING",
+  "crossover": "UNIFORM_CROSSOVER",
+  "mutation": "PM_MUTATION",
+  "eliminate_duplicates": true,
+  "objectives": ["AVG_DL_RATE", "POWER_CONSUMPTION"]
+}
