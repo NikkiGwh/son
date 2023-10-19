@@ -31,23 +31,23 @@ default_simulation_params = {
     "eliminate_duplicates": True,
     "objectives": [ObjectiveEnum.AVG_DL_RATE.value, ObjectiveEnum.POWER_CONSUMPTION.value],
     "algorithm": AlgorithmEnum.NSGA2.value,
-    "moving_speed": 28.0,
+    "moving_speed": 1.9,
     "reset_rate_in_ngen": 15,
     "moving_selection_percent": 30,
     "running_time_in_s": 120,
     "iterations": 1,
     "greedy_to_moving": False,
     "use_greedy_assign": False,
-    "moving_selection_name": ""
+    "moving_selection_name": "",
+    "running_mode": RunningMode.STATIC.value
 } | default_node_params
 
 class Network_Simulation_State():
-    def __init__(self, graph: Son, script_mode=False, network_name="", script_config_name="", evo_only_config_path="", fps = 1) -> None:
+    def __init__(self, graph: Son, script_mode=False, network_name="", config_file_path="", fps = 1) -> None:
         self.script_mode = script_mode
         self.fps = fps
         self.optimization_process = multiprocessing.Process()
         self.config_params = default_simulation_params
-        self.running_mode = RunningMode.LIVE.value
         self.current_config_name = ""
         self.current_network_name = ""
         self.finished = False
@@ -82,21 +82,14 @@ class Network_Simulation_State():
             self.current_network_name = network_name
             # load network graph
             self.load_current_adjacencies()
-        
-            if evo_only_config_path != "":
-                # load param config from predefined folder
-                self.load_evo_only_param_config_from_file(evo_only_config_path)
-                # load moving selections
-                self.load_current_moving_selection()
-            
-            if script_mode:
-                if script_config_name != "":
+
+            if config_file_path != "":
                     # load param config script config folder
-                    self.current_config_name = script_config_name
-                    self.load_param_config_from_file("predefined_configs/" + script_config_name + ".json")
+                    self.load_param_config_from_file(config_file_path)
                     # load moving selections
                     self.load_current_moving_selection()
-
+            
+            if script_mode:
                 # set iterations to -1 so that optimiaztion starts itself
                 self.iterations = -1
                 # start optimization -> happens in running_method
@@ -210,16 +203,11 @@ class Network_Simulation_State():
         # load param config
         with open(file_path, 'r', encoding="utf-8") as openfile:
                 # Reading params from json file
-                self.config_params = json.load(openfile)
-                # apply network params
-                self.apply_current_network_params_to_graph()
-    
-    def load_evo_only_param_config_from_file(self, file_path: str):
-        # load param config
-        with open(file_path, 'r', encoding="utf-8") as openfile:
-                # Reading params from json file
-                evo_config = json.load(openfile)
-                self.config_params = default_simulation_params | evo_config
+                loaded_params = json.load(openfile)
+                self.config_params = default_simulation_params | loaded_params
+                # set current config name
+                index = file_path.rfind("/")
+                self.current_config_name = file_path[index+1:-5]
                 # apply network params
                 self.apply_current_network_params_to_graph()
     
@@ -479,6 +467,11 @@ class Network_Simulation_State():
         # invoke evo_reset if threshhold is met
         correction_factor = 1 if self.fps == 30 else 2
 
+        print(self.ngen_since_last_evo_reset)
+        print(self.config_params["reset_rate_in_ngen"])
+        print(self.pymoo_is_reset_ready)
+        print("-----")
+
         if self.ngen_since_last_evo_reset >= self.config_params["reset_rate_in_ngen"]-correction_factor and self.pymoo_is_reset_ready:
             # check if current activation profile is valid
             # or someone has moved since last call
@@ -525,7 +518,7 @@ class Network_Simulation_State():
             # in case of script mode self.iterations initially is -1
             self.iterations = 0
             
-        if self.running_mode == RunningMode.LIVE.value and self.config_params["moving_selection_name"] == "":
+        if self.config_params["running_mode"] == RunningMode.LIVE.value and self.config_params["moving_selection_name"] == "":
             return ErrorEnum.NO_MOVING_SELECTION.value
         
         if self.iterations == 0:
@@ -551,7 +544,7 @@ class Network_Simulation_State():
                 self.get_current_config_directory(),
                 self.pymoo_message_queue,
                 self.editor_message_queue,
-                self.running_mode,
+                self.config_params["running_mode"],
                 0.3,
                 0.3
             ))
@@ -564,13 +557,13 @@ class Network_Simulation_State():
     def on_optimization_run_has_finished(self):
         self.optimization_running = False
         self.iterations += 1
-        if self.running_mode == RunningMode.LIVE.value:
+        if self.config_params["running_mode"] == RunningMode.LIVE.value:
             self.save_objective_history_to_file()
 
         print("finished " + str(self.iterations) + " iteraiton")
                   
         self.reset_all_after_run()
-        if self.iterations < self.config_params["iterations"] and self.running_mode != RunningMode.STATIC.value:
+        if self.iterations < self.config_params["iterations"] and self.config_params["running_mode"] != RunningMode.STATIC.value:
             self.start_evo(self.current_config_name)
         else:
             if not self.script_mode:
@@ -597,6 +590,7 @@ class Network_Simulation_State():
         self.running_ticks = 0
         self.n_gen_since_last_fetch = 0
         self.ngen_total = 0
+        self.pymoo_is_reset_ready = True
         # reset moving users vecors from file:
         self.load_current_moving_selection()
         self.finished = False
@@ -617,7 +611,7 @@ class Network_Simulation_State():
                 self.start_evo(self.current_config_name)
 
         if self.optimization_running:
-            if self.running_mode == RunningMode.LIVE.value:
+            if self.config_params["running_mode"] == RunningMode.LIVE.value:
                 # if self.running_ticks % self.fps == 0 and self.running_ticks <= self.config_params["running_time_in_s"] * self.fps:
                 self.move_some_users()
                 # trigger evo_reset if current activation profile violates son topology and to adjust to movement changes
@@ -680,7 +674,7 @@ class Network_Simulation_State():
                 self.son.apply_activation_profile_greedy_user(update_attributes=True)
 
             
-            if self.running_mode == RunningMode.LIVE.value:
+            if self.config_params["running_mode"] == RunningMode.LIVE.value:
                 # update objectives every second
                 if self.running_ticks % self.fps == 0 and self.running_ticks <= self.config_params["running_time_in_s"] * self.fps:
                     self.update_objective_history()
@@ -701,10 +695,12 @@ class Network_Simulation_State():
 
 if __name__ == "__main__":
     network_name = sys.argv[1]
-    config_name = sys.argv[2]
+    config_file_path = sys.argv[2]
+
     son = Son()
     fps = 1
-    simulation = Network_Simulation_State(son, script_mode=True, network_name=network_name, script_config_name=config_name, fps=fps)
+    
+    simulation = Network_Simulation_State(son, script_mode=True, network_name=network_name, config_file_path=config_file_path, fps=fps)
     
     dt = 1
     while(simulation.iterations < simulation.config_params["iterations"]):

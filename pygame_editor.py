@@ -240,6 +240,7 @@ class Editor():
     def update_network_info_lables(self):
         beams = 0
         bs_nodes_list = list(filter(lambda x: x[1]["type"] != "cell", self.net_sim.son.graph.nodes.data()))
+        edge_count = len(self.net_sim.son.graph.edges)
         for _, bs_node in enumerate(bs_nodes_list):
             beams += self.net_sim.son.network_node_params[bs_node[1]["type"]]["antennas"]
 
@@ -249,6 +250,7 @@ class Editor():
                     lambda x: x[1]["type"] == "cell", self.net_sim.son.graph.nodes.data())))
         self.capacity_label.set_text(f"network capacity: {beams}")
         self.user_count_label.set_text(f"user count: {user_count}")
+        self.edge_count_label.set_text(f"edges: {edge_count}")
 
     def onclick_show_edges_checkbox(self):
         self.show_edges_checkbox_active = not self.show_edges_checkbox_active
@@ -393,7 +395,7 @@ class Editor():
         self.update_network_info_lables()
 
     def on_dropdown_mode_changed(self, event: pygame.event.Event):
-        self.net_sim.running_mode = event.text
+        self.net_sim.config_params["running_mode"] = event.text
 
     def create_live_param_ui_elements(self):
         
@@ -564,6 +566,9 @@ class Editor():
             (320, 110), (-1, 30)), f"user capacity: 0", self.manager, self.ui_container)
         self.user_count_label = pygame_gui.elements.UILabel(pygame.Rect(
             (320, 140), (-1, 30)), "user count: 0", self.manager, self.ui_container)
+        self.edge_count_label = pygame_gui.elements.UILabel(pygame.Rect(
+            (320, 170), (-1, 30)), "edges: 0", self.manager, self.ui_container)
+        
         self.update_network_info_lables()
 
         self.input_channel_bandwidth_label = pygame_gui.elements.UILabel(pygame.Rect(
@@ -718,7 +723,7 @@ class Editor():
 
         self.dropdown_pick_running_mode = pygame_gui.elements.UIDropDownMenu(
             options_list=[item.value for item in RunningMode],
-            starting_option=self.net_sim.running_mode,
+            starting_option=self.net_sim.config_params["running_mode"],
             relative_rect=pygame.Rect((20, 620), (200, 30)),
             manager=self.manager,
             container=self.ui_container,
@@ -1036,7 +1041,6 @@ class Editor():
 
 if __name__ == "__main__":
     son = Son()
-    # main = Editor(Network_Simulation_State(son,script_mode=False, network_name="hetNet2", evo_only_config_path="./evo_only_config.json"))
     main = Editor(Network_Simulation_State(son,script_mode=False))
     main.run()
     # cProfile.run("main.run()", sort="tottime")

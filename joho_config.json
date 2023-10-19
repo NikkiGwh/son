@@ -1,0 +1,11 @@
+{
+  "pop_size": 200,
+  "n_offsprings": 40,
+  "n_generations": 600,
+  "sampling": "SON_RANDOM_SAMPLING",
+  "crossover": "UNIFORM_CROSSOVER",
+  "mutation": "PM_MUTATION",
+  "eliminate_duplicates": true,
+  "objectives": ["AVG_DL_RATE", "POWER_CONSUMPTION"],
+  "algorithm": "NSGA2"
+}
