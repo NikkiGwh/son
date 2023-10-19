@@ -35,29 +35,35 @@ python pygame_editor.py
 
 ## example for running predefined experiments via script arguments
 
-python network_simulation_script.py [network-name] [configuration-name]
+python network_simulation_script.py [network-name] [configuration-json-file-path]
 
 ```
-python network_simulation_script.py hetNet2 hetNet2_predefined_70_greedy
+python network_simulation_script.py hetNet2 ./hetNet2_predefined_70_greedy.json
 ```
 
-predefined configurations (i.e. hetNet2_predefined_70_greedy.json) are located in the ./predefined_configs directory
+make sure that a network with the corresponding name already exists before execution. Otherwise it won't work.
 
-You can only choose network names which already have a directory (i.e. hetNet2)
+You will find the results inside a new folder with the name of the config-json-file-path parameter. This folder will appear in directory of the corresponding networkname of the run.
 
 ## Run the software on the cluster
 
 - Get your code onto the cluster
 - Use the following to build the image (the .def file contains the container definition)
+
 ```
 apptainer build nns.sif nns.def
 ```
+
 - Use the `slurm_job.sh` to run the container on the cluster with the following command from the directory containing the code
+
 ```
 sbatch slurm_job.sh
 ```
-To change how the programm is run, change either the `.def` file, or use 
+
+To change how the programm is run, change either the `.def` file, or use
+
 ```
 apptainer exec nns.sif COMMAND
 ```
+
 in the `slurm_job.sh`.
