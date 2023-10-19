@@ -467,11 +467,6 @@ class Network_Simulation_State():
         # invoke evo_reset if threshhold is met
         correction_factor = 1 if self.fps == 30 else 2
 
-        print(self.ngen_since_last_evo_reset)
-        print(self.config_params["reset_rate_in_ngen"])
-        print(self.pymoo_is_reset_ready)
-        print("-----")
-
         if self.ngen_since_last_evo_reset >= self.config_params["reset_rate_in_ngen"]-correction_factor and self.pymoo_is_reset_ready:
             # check if current activation profile is valid
             # or someone has moved since last call
