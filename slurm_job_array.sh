@@ -16,9 +16,9 @@ experimentName=sonNiklas
 # declare -a combinations
 declare -a configNames
 
-configNames[0]="./predefined_configs/hetNet2_predefined_70_resetting_15_0"
-configNames[1]="./predefined_configs/hetNet2_predefined_70_resetting_15_1"
-configNames[2]="./predefined_configs/hetNet2_predefined_70_resetting_15_2"
+configNames[0]="./experiment_configs/big_70_7kmh_evo_resetting_15.json"
+configNames[1]="./experiment_configs/big_70_7kmh_evo_resetting_30.json"
+configNames[2]="./experiment_configs/big_70_7kmh_greedy.json"
 
 # index=0
 # b=0
@@ -61,5 +61,4 @@ srun nproc
 echo ${configNames[${SLURM_ARRAY_TASK_ID}]} started
 # java -jar morp-benchmark-suite-1.0.0-SNAPSHOT.one-jar.jar -ex $experimentName -kn $k -ms $ms -ele $ele -o $obs ${back} -p 100 -g 200 -n NSGAIIDMS${alg}${dm} -pnm ${alg} -dm ${dm} -df EUCLID -inter -ir 31
 srun apptainer exec nns.sif python network_simulation_script.py test ${configNames[${SLURM_ARRAY_TASK_ID}]}
-echo ${experimentName}FRD${alg}${dm}${k}${obs}${ms}${ele}${back}EXENDED
 echo ${configNames[${SLURM_ARRAY_TASK_ID}]} finished
