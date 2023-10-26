@@ -3,7 +3,7 @@ import multiprocessing
 import numpy as np
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.algorithms.moo.nsga3 import NSGA3
-from pymoo.algorithms.base.genetic import GeneticAlgorithm
+from pymoo.algorithms.base.genetic import GeneticAlgorithm, Algorithm
 from pymoo.core.problem import ElementwiseProblem
 from pymoo.optimize import minimize
 from pymoo.util.ref_dirs import get_reference_directions
@@ -340,7 +340,13 @@ class MyCallback(Callback):
         self.n_gen_since_last_fetch = 0
         self.n_gen_since_last_reset = 0
 
-    def notify(self, algorithm: GeneticAlgorithm):
+    def notify(self, algorithm: Algorithm):
+
+        # TODO adjust decision space boundaies here and don't restart optimization
+        # TODO repair current population here
+        print(algorithm.problem.xu)
+        print(algorithm.problem.xl)
+        print("--------")
 
         if self.running_mode == RunningMode.LIVE.value or self.running_mode == RunningMode.STATIC.value:
             # update counter
