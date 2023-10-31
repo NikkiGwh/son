@@ -38,12 +38,14 @@ python pygame_editor.py
 python network_simulation_script.py [network-name] [configuration-json-file-path]
 
 ```
-python network_simulation_script.py hetNet2 ./hetNet2_predefined_70_greedy.json
+python network_simulation_script.py test ./evo_only_config.json
 ```
 
 make sure that a network with the corresponding name already exists before execution. Otherwise it won't work.
 
 You will find the results inside a new folder with the name of the config-json-file-path parameter. This folder will appear in directory of the corresponding networkname of the run.
+
+for the example above this would mean the results will appear in the folder datastore/test/evo_only_config/... after runtime.
 
 ## Run the software on the cluster
 
