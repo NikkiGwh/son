@@ -344,9 +344,6 @@ class MyCallback(Callback):
 
         # TODO adjust decision space boundaies here and don't restart optimization
         # TODO repair current population here
-        print(algorithm.problem.xu)
-        print(algorithm.problem.xl)
-        print("--------")
 
         if self.running_mode == RunningMode.LIVE.value or self.running_mode == RunningMode.STATIC.value:
             # update counter
@@ -371,7 +368,6 @@ class MyCallback(Callback):
 
             ####### normal result propagation after ######
 
-            # TODO loo if the selection actually picks the solution from pareto front !!!
             activation_dict = select_solution(
                 self.son,
                 decision_space=algorithm.pop.get("X"),
@@ -609,9 +605,6 @@ def start_optimization(
         with open(file_path, 'w', encoding="utf-8") as file:
             file.write(json_data)
 
-    
-    ## last messagef from pymoo after terminattion criteria is met fo both modes:
-    # TODO look if the selection actually picks the solution from pareto front !!! does it use the right son object ?
     activation_dict = select_solution(
         son_obj,
         decision_space=result.X,
