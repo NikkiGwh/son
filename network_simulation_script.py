@@ -632,7 +632,10 @@ class Network_Simulation_State():
                     self.ngen_total = callback_obj["n_gen"]
 
                     self.queue_flags["n_gen_since_last_reset"] = callback_obj["n_gen_since_last_reset"]
-                    self.queue_flags["just_resetted"] = callback_obj["just_resetted"]
+                    
+                    if callback_obj["just_resetted"] == True:
+                        self.queue_flags["just_resetted"] = callback_obj["just_resetted"]
+
 
                 # react to queue messages
                 if self.queue_flags["activation_dict"] is not False and self.queue_flags["objective_space"] is not False:
@@ -645,7 +648,6 @@ class Network_Simulation_State():
 
                 if self.queue_flags["just_resetted"]:
                     self.pymoo_is_reset_ready = True
-
 
                 self.ngen_since_last_evo_reset = self.queue_flags["n_gen_since_last_reset"]
                 # reset queue_flags

@@ -339,6 +339,7 @@ class MyCallback(Callback):
         self.running_mode = running_mode
         self.n_gen_since_last_fetch = 0
         self.n_gen_since_last_reset = 0
+        self.trigger_terminate = False
 
     def notify(self, algorithm: Algorithm):
 
@@ -349,6 +350,7 @@ class MyCallback(Callback):
             # update counter
             self.n_gen_since_last_fetch += 1
             self.n_gen_since_last_reset += 1
+            self.trigger_terminate = False
             
             # read editor message queue
             while self.editor_message_queue.empty() is False:
@@ -357,13 +359,13 @@ class MyCallback(Callback):
                 if queue_obj["terminate"] == True:
                     ##### react to terminate #####
                     self.data["external_termination"] = True
-                    algorithm.termination.terminate()
+                    self.trigger_terminate = True
                 elif queue_obj["reset"] == True and queue_obj["graph"] is not False:
                     ##### react to reset #####
                     self.data["external_reset"] = True
                     self.data["graph"] = queue_obj["graph"]
                     self.n_gen_since_last_reset = 0
-                    algorithm.termination.terminate()
+                    self.trigger_terminate = True
 
 
             ####### normal result propagation after ######
@@ -383,6 +385,9 @@ class MyCallback(Callback):
                     "n_gen_since_last_reset": self.n_gen_since_last_reset,
                     "n_gen": algorithm.n_gen + self.total_gen
                     })
+            
+            if self.trigger_terminate:
+                algorithm.termination.terminate()
 
 ################################ main ###################
 
