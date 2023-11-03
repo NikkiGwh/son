@@ -411,7 +411,7 @@ def start_optimization(
     mutationConfig = None
     crossoverConfig = None
 
-    verbose = True
+    verbose = False
     history = True
     if running_mode == RunningMode.LIVE.value:
         history = False
