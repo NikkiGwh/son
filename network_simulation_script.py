@@ -39,9 +39,10 @@ default_simulation_params = {
     "greedy_to_moving": False,
     "use_greedy_assign": False,
     "moving_selection_name": "",
-    "running_mode": RunningMode.STATIC.value,
+    "running_mode": RunningMode.LIVE.value,
     "crossover_prob": 0.9, # 0.9 is pymoo default
-    "mutation_prob": 0.9 # 0.9 is pymoo default
+    "mutation_prob": 0.9, # 0.9 is pymoo default
+    "mutation_prob_var": None # None is pymoo default --> converts to 1/number_of_variables
 } | default_node_params
 
 class Network_Simulation_State():
@@ -543,8 +544,10 @@ class Network_Simulation_State():
                 self.pymoo_message_queue,
                 self.editor_message_queue,
                 self.config_params["running_mode"],
+                self.config_params["mutation_prob"],
                 self.config_params["crossover_prob"],
-                self.config_params["crossover_prob"]
+                self.config_params["mutation_prob_var"],
+                None
             ))
             self.optimization_process.start()
 

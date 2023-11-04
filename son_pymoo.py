@@ -1,3 +1,4 @@
+from copy import deepcopy
 import json
 import multiprocessing
 import numpy as np
@@ -16,6 +17,7 @@ from pymoo.operators.crossover.sbx import SBX
 from pymoo.operators.mutation.pm import PolynomialMutation
 from pymoo.operators.repair.rounding import RoundingRepair
 from son_main_script import Son
+from pymoo.core.variable import Real, get
 from enum import Enum
 from pymoo.decomposition.asf import ASF
 from pymoo.core.callback import Callback
@@ -229,7 +231,7 @@ class SonRepairSampling(Sampling):
         # convert seed_pop to decision space and repair it to match current topology
         seed_pop_decision_space = convert_design_space_pop_to_decision_space_pop(
             problem.son_original, self.seed_pop_design_space, repair=True)
-
+        
         return seed_pop_decision_space
 
 
@@ -240,7 +242,6 @@ class SonRandomSampling(Sampling):
         for i in range(n_samples):
             for j in range(problem.n_var):
                 X[i][j] = np.random.randint(problem.xl[j], problem.xu[j]+1)
-
         return X
 class HighRssiFirstSampling(Sampling):
     def _do(self, problem: SonProblemElementWise, n_samples, **kwargs):
@@ -255,6 +256,7 @@ class HighRssiFirstSampling(Sampling):
         greedy_activation_design_space = problem.son_original.find_activation_profile_greedy_user()
         greedy_activation_decision_space = convert_design_space_ind_to_decision_space_ind(problem.son_original, greedy_activation_design_space)
         X[-1] = greedy_activation_decision_space
+
         return X
 
 
@@ -286,21 +288,52 @@ class SonCrossover(Crossover):
 
 class SonMutation(Mutation):
 
-    def __init__(self):
-        super().__init__()
-
+    def __init__(self, prob:float, prob_var):
+        super().__init__(prob=prob, prob_var=prob_var)
+    
+   
     def _do(self, problem: SonProblemElementWise, X, **kwargs):
-        # for each individual
-        for k, individual in enumerate(X):
-            r = np.random.random()
-            # with a probabilty of 30% switch on another random edge
-            if r < 0.3:
-                random_index = np.random.randint(0, problem.n_var)
-                X[k][random_index] = np.random.randint(
-                    problem.xl[random_index],
-                    problem.xu[random_index] + 1)
+        prob_var = self.get_prob_var(problem, size=(len(X), 1))
+        Xp = np.copy(X)
+        flip = np.random.random(X.shape) < prob_var
+        possible_activations_dict = problem.son_original.get_possible_activations_dict()
+        possible_activations_list = list(possible_activations_dict)
 
-        return X
+        for ind_index, ind_decision_space in enumerate(Xp):
+            for variable_index, active_bs in enumerate(ind_decision_space):
+                # print(possible_activations_dict[possible_activations_list[variable_index]])
+                # print(active_bs)
+                # print(flip[ind_index][variable_index])
+                # print("------")
+                new_active_bs = active_bs
+                if flip[ind_index][variable_index]:
+                    while active_bs == new_active_bs and len(possible_activations_dict[possible_activations_list[variable_index]]) > 1:
+                        new_active_bs = np.random.randint(0, len(possible_activations_dict[possible_activations_list[variable_index]]))
+                    Xp[ind_index][variable_index] = new_active_bs
+        return Xp
+
+    def do(self, problem: SonProblemElementWise, pop, inplace=True, **kwargs):
+
+        # if not inplace copy the population first
+        if not inplace:
+            pop = deepcopy(pop)
+
+        n_mut = len(pop)
+
+        # get the variables to be mutated -> only the new offsprings are considered
+        X = pop.get("X")
+        # retrieve the mutation variables
+        Xp = self._do(problem, X, **kwargs)
+
+        # the likelihood for a mutation on the individuals
+        prob = get(self.prob, size=n_mut)
+
+        mut = np.random.random(size=n_mut) <= prob
+
+        # store the mutated individual back to the population
+        pop[mut].set("X", Xp[mut])
+
+        return pop
 
 
 class SonDublicateElimination(ElementwiseDuplicateElimination):
@@ -418,18 +451,19 @@ def start_optimization(
         pymoo_message_queue: multiprocessing.Queue,
         editor_message_queue: multiprocessing.Queue,
         running_mode: str,
-        prob_mutation: float = 0.9,  # 0.9 is pymoo default
-        prob_crossover: float = 0.9,  # 0.9 is pymoo default
+        mutation_prob: float = 0.9,  # 0.9 is pymoo default
+        crossover_prob: float = 0.9,  # 0.9 is pymoo default
+        mutation_prob_var = None,
         seed=None):
 
     pymooAlgorithm = None
     samplingConfig = None
     mutationConfig = None
     crossoverConfig = None
-    print(prob_mutation)
-    print(prob_crossover)
+
     verbose = True
     history = True
+
     if running_mode == RunningMode.LIVE.value:
         history = False
     else:
@@ -445,24 +479,24 @@ def start_optimization(
 
     # crossover
     if (crossover == CrossoverEnum.SBX_CROSSOVER.value):
-        crossoverConfig = SBX(prob=prob_crossover, eta=3, vtype=float, repair=RoundingRepair())
+        crossoverConfig = SBX(prob=crossover_prob, eta=3, vtype=float, repair=RoundingRepair())
     elif (crossover == CrossoverEnum.UNIFORM_CROSSOVER.value):
-        crossoverConfig = UniformCrossover(prob=prob_crossover)
+        crossoverConfig = UniformCrossover(prob=crossover_prob)
     elif (crossover == CrossoverEnum.ONE_POINT_CROSSOVER.value):
-        crossoverConfig = SinglePointCrossover(prob=prob_crossover)
+        crossoverConfig = SinglePointCrossover(prob=crossover_prob)
     elif (crossover == CrossoverEnum.SON_CROSSOVER.value):
-        crossoverConfig = SonCrossover(prob=prob_crossover)
+        crossoverConfig = SonCrossover(prob=crossover_prob)
     else:
-        crossoverConfig = SonCrossover(prob=prob_crossover)
+        crossoverConfig = SonCrossover(prob=crossover_prob)
 
     # mutation
     if (mutation == MutationEnum.PM_MUTATION.value):
         mutationConfig = PolynomialMutation(
-            prob=prob_mutation, eta=3, vtype=int)
+            prob=mutation_prob, prob_var=mutation_prob_var, eta=3, vtype=int)
     elif (mutation == MutationEnum.BIT_FLIP):
-        mutationConfig = BitflipMutation(prob=prob_mutation, prob_var=0.3)
+        mutationConfig = BitflipMutation(prob=mutation_prob, prob_var=mutation_prob_var)
     else:
-        mutationConfig = SonMutation()
+        mutationConfig = SonMutation(prob=mutation_prob, prob_var=mutation_prob_var)
 
     # algorithm config
     if (algorithm == AlgorithmEnum.NSGA3.value):
