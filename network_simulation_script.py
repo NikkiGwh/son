@@ -466,10 +466,10 @@ class Network_Simulation_State():
     def trigger_evo_reset_invalid_activation_profile(self):
         # invoke evo_reset if threshhold is met
         correction_factor = 1 if self.fps == 30 else 2
-
         if self.ngen_since_last_evo_reset >= self.config_params["reset_rate_in_ngen"]-correction_factor and self.pymoo_is_reset_ready:
             # check if current activation profile is valid
             # or someone has moved since last call
+
             if self.topology_changed:
                 self.dt_since_last_evo_reset = 0
                 self.ngen_since_last_evo_reset = 0
@@ -481,6 +481,7 @@ class Network_Simulation_State():
                 for _, node in enumerate(self.son.graph.nodes.data()):
                     node_dic_with_attributes[node[0]] = node[1]
 
+                self.pymoo_is_reset_ready = False
                 self.editor_message_queue.put(
                     {"terminate": False,
                      "graph":
@@ -488,7 +489,6 @@ class Network_Simulation_State():
                       "node_dic_with_attributes": node_dic_with_attributes
                       },
                      "reset": True})
-                self.pymoo_is_reset_ready = False
     
     def stop_evo(self):
         self.editor_message_queue.put(

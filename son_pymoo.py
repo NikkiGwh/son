@@ -350,7 +350,6 @@ class MyCallback(Callback):
             # update counter
             self.n_gen_since_last_fetch += 1
             self.n_gen_since_last_reset += 1
-            self.trigger_terminate = False
             
             # read editor message queue
             while self.editor_message_queue.empty() is False:
@@ -376,18 +375,30 @@ class MyCallback(Callback):
                 objective_space=algorithm.pop.get("F"))
             
             self.n_gen_since_last_fetch = 0
-            self.pymoo_message_queue.put(
-                {"activation_dict": activation_dict,
-                    "objective_space": algorithm.pop.get("F"),
-                    "finished": False,
-                    "just_resetted": True if self.n_gen_since_last_reset == 0 else False,
-                    "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
-                    "n_gen_since_last_reset": self.n_gen_since_last_reset,
-                    "n_gen": algorithm.n_gen + self.total_gen
-                    })
+            
+            if self.pymoo_message_queue.empty() and not self.trigger_terminate:
+                self.pymoo_message_queue.put(
+                    {"activation_dict": activation_dict,
+                        "objective_space": algorithm.pop.get("F"),
+                        "finished": False,
+                        "just_resetted": True if self.n_gen_since_last_reset == 0 else False,
+                        "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
+                        "n_gen_since_last_reset": self.n_gen_since_last_reset,
+                        "n_gen": algorithm.n_gen + self.total_gen
+                        })
             
             if self.trigger_terminate:
                 algorithm.termination.terminate()
+                self.trigger_terminate = False
+                self.pymoo_message_queue.put(
+                    {"activation_dict": activation_dict,
+                        "objective_space": algorithm.pop.get("F"),
+                        "finished": False,
+                        "just_resetted": True if self.n_gen_since_last_reset == 0 else False,
+                        "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
+                        "n_gen_since_last_reset": self.n_gen_since_last_reset,
+                        "n_gen": algorithm.n_gen + self.total_gen
+                        })
 
 ################################ main ###################
 
