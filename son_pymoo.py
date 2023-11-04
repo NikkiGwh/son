@@ -426,7 +426,8 @@ def start_optimization(
     samplingConfig = None
     mutationConfig = None
     crossoverConfig = None
-
+    print(prob_mutation)
+    print(prob_crossover)
     verbose = True
     history = True
     if running_mode == RunningMode.LIVE.value:

@@ -39,7 +39,9 @@ default_simulation_params = {
     "greedy_to_moving": False,
     "use_greedy_assign": False,
     "moving_selection_name": "",
-    "running_mode": RunningMode.STATIC.value
+    "running_mode": RunningMode.STATIC.value,
+    "crossover_prop": 0.9, # 0.9 is pymoo default
+    "mutation_prop": 0.9 # 0.9 is pymoo default
 } | default_node_params
 
 class Network_Simulation_State():
@@ -204,6 +206,7 @@ class Network_Simulation_State():
         with open(file_path, 'r', encoding="utf-8") as openfile:
                 # Reading params from json file
                 loaded_params = json.load(openfile)
+                # set loaded params and set missing params with default values
                 self.config_params = default_simulation_params | loaded_params
                 # set current config name
                 index = file_path.rfind("/")
@@ -540,8 +543,8 @@ class Network_Simulation_State():
                 self.pymoo_message_queue,
                 self.editor_message_queue,
                 self.config_params["running_mode"],
-                0.3,
-                0.3
+                self.config_params["crossover_prop"],
+                self.config_params["crossover_prop"]
             ))
             self.optimization_process.start()
 

@@ -5,6 +5,8 @@
   "sampling": "SON_RANDOM_SAMPLING",
   "crossover": "UNIFORM_CROSSOVER",
   "mutation": "PM_MUTATION",
+  "crossover_prob": 0.9,
+  "mutation_prob": 0.9,
   "eliminate_duplicates": true,
   "objectives": ["AVG_DL_RATE", "POWER_CONSUMPTION"],
   "algorithm": "NSGA2"
