@@ -138,7 +138,7 @@ def select_solution(son: Son, decision_space, objective_space: np.ndarray,
     np.seterr(divide='ignore', invalid='ignore')
     nF = (objective_space - approx_ideal) / (approx_nadir - approx_ideal)
     decomp = ASF()
-
+    
     if len(weights) != objective_space.shape[1]:
         weights = [1/objective_space.shape[1] for _ in range(objective_space.shape[1])]
 
