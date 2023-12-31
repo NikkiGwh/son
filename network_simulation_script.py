@@ -6,7 +6,7 @@ import time
 from event import Event
 from son_pymoo import AlgorithmEnum, CrossoverEnum, MutationEnum, ObjectiveEnum, RunningMode, SamplingEnum, start_optimization
 from scipy.constants import speed_of_light
-from son_main_script import Son, default_node_params
+from son_main_script import NodeType, Son, default_node_params
 import networkx as nx
 import numpy as np
 import json
@@ -22,7 +22,7 @@ class ErrorEnum(Enum):
 
 default_simulation_params = {
     "pop_size": 200,
-    "n_offsprings": 40,
+    "n_offsprings": 50,
     "n_generations": 100,
     "termination": "",
     "sampling": SamplingEnum.HIGH_RSSI_FIRST_SAMPLING.value,
@@ -31,13 +31,16 @@ default_simulation_params = {
     "eliminate_duplicates": True,
     "objectives": [ObjectiveEnum.AVG_DL_RATE.value, ObjectiveEnum.POWER_CONSUMPTION.value],
     "algorithm": AlgorithmEnum.NSGA2.value,
-    "moving_speed": 1.9,
-    "reset_rate_in_ngen": 15,
+    "moving_speed": 1.2,
+    "reset_rate_in_ngen": 30,
     "moving_selection_percent": 30,
     "running_time_in_s": 120,
     "iterations": 1,
     "greedy_to_moving": False,
     "use_greedy_assign": False,
+    "node_history": False,
+    "objectivespace_history": True,
+    "decisionspace_history": False,
     "moving_selection_name": "",
     "running_mode": RunningMode.LIVE.value,
     "crossover_prob": 0.9, # 0.9 is pymoo default
@@ -64,13 +67,19 @@ class Network_Simulation_State():
         self.pymoo_is_reset_ready = True
         self.dt_since_last_evo_reset = 0
         self.objective_history = []
+        self.node_history = []
+        self.objectivespace_history = []
+        self.current_pop_objectivespace = []
+        self.decisionspace_history = []
+        self.current_pop_decisionspace = []
         self.ngen_since_last_evo_reset = 0
         self.running_time_in_s = 0
         self.running_ticks = 0
         self.iterations = 0
         self.moving_users = {}
+        self.bs_min_max_pos = ((0,0),(0,0))
         self.show_moving_users = False
-        self.queue_flags = {"activation_dict": False, "objective_space": False,
+        self.queue_flags = {"activation_dict": False, "objective_space": False, "decision_space": False,
                             "just_resetted": False,
                             "n_gen_since_last_fetch": 0, "n_gen": 0,
                             "n_gen_since_last_reset": 0}
@@ -130,10 +139,10 @@ class Network_Simulation_State():
         return speed_of_light / frequency / 1000000000
     
     def hz_to_mhz(self, frequcnecy):
-        return frequcnecy / 1000
+        return frequcnecy / 1000000
     
     def mhz_to_hz(self, frequency):
-        return frequency * 1000
+        return frequency * 1000000
 
     
     ######## get folder directories and list of filenames etc
@@ -303,9 +312,14 @@ class Network_Simulation_State():
         
         self.current_config_name = new_config_name
         return ""
-    
     def save_objective_history_to_file(self):
-        json_data = json.dumps(self.objective_history)
+
+        json_data = json.dumps({
+            "objective_history": self.objective_history,
+            "node_history": self.node_history,
+            "objectivespace_history": self.objectivespace_history,
+            "decisionspace_history": self.decisionspace_history
+            })
         # Save objective JSON data to a file
 
         with open(f"{self.get_current_config_directory()}objectives_result_{self.iterations}.json", 'w', encoding="utf-8") as file:
@@ -345,6 +359,8 @@ class Network_Simulation_State():
         
         for _, bs_node in enumerate(list(filter(self.son.filter_bs_nodes, self.son.graph.nodes.data()))):
             bs_user_count = round(self.son.network_node_params[bs_node[1]["type"]]["antennas"] * percentage / 100)
+            if bs_user_count == 0:
+                continue
             space_in_deg = 360 / bs_user_count
             radius = self.son.get_bs_type_range(bs_node[1]["type"]) / 2
             radius_vec = np.array([0, radius])
@@ -364,6 +380,38 @@ class Network_Simulation_State():
                     y_pos = 0
 
                 self.son.add_user_node((x_pos, y_pos),update_network=False)
+    
+    def generate_bs_nodes(self, bs_count: int, type: NodeType):
+
+        bs_node_id_list = [x[0] for x in self.son.graph.nodes.data() if x[1]["type"] == type.value]
+        bs_node_id_list = np.append([x[0] for x in self.son.graph.nodes.data() if x[1]["type"] == NodeType.CELL.value], bs_node_id_list)
+        self.son.graph.remove_nodes_from(bs_node_id_list)
+        
+        for _, macro_node in enumerate([ value for value in list(filter(self.son.filter_bs_nodes, self.son.graph.nodes.data())) if value[1]["type"] == NodeType.MACRO.value]):
+            
+            if bs_count == 0:
+                continue
+            space_in_deg = 360 / bs_count
+            radius = self.son.get_bs_type_range(macro_node[1]["type"]) * 0.6
+            radius_vec = np.array([0, radius])
+
+           
+            for counter in range(0, bs_count):
+                rotated_radius_vec = self.rotate_vector_by_deg(radius_vec, counter * space_in_deg, False)
+                x_pos = macro_node[1]["pos_x"] + rotated_radius_vec[0]
+                y_pos = macro_node[1]["pos_y"] + rotated_radius_vec[1]
+
+                if x_pos > 10000:
+                    x_pos = 10000
+                if x_pos < 0:
+                    x_pos = 0
+                if y_pos > 10000:
+                    y_pos = 10000
+                if y_pos < 0:
+                    y_pos = 0
+
+                self.son.add_bs_node((x_pos, y_pos), update_network=False, bs_type=type.value)
+    
 
     def rotate_vector_by_deg(self, vec: np.ndarray, deg: float, normalize=True) -> np.ndarray:
         # rotate vector
@@ -376,6 +424,16 @@ class Network_Simulation_State():
             v2 = v2 / np.linalg.norm(v2)
         
         return v2
+    
+    def get_vector_to_canvas_center(self, pos: np.ndarray, normalize=True) -> np.ndarray:
+        canvas_center = np.array([10000/2, 10000/2])
+        v2 = canvas_center- pos
+
+        if normalize:
+            v2 = v2 / np.linalg.norm(v2)
+            
+        return v2
+
 
     def move_some_users(self):
         if self.config_params["moving_speed"] == 0:
@@ -408,9 +466,13 @@ class Network_Simulation_State():
         (next_x_pos, next_y_pos) = self.son.graph.nodes.data()[
             user_node_id]["pos_x"] + moving_vector[0], self.son.graph.nodes.data()[user_node_id]["pos_y"] + moving_vector[1]
 
-        if not (next_x_pos <= 10000 and next_x_pos >= 0 and next_y_pos >= 0 and next_y_pos <= 10000):
-            new_direction_numpy = self.rotate_vector_by_deg(
-                np.array(self.moving_users[user_node_id]), 180)
+        if not (next_x_pos <= self.bs_min_max_pos[1][0] and next_x_pos >= self.bs_min_max_pos[0][0] and next_y_pos >= self.bs_min_max_pos[0][1] and next_y_pos <= self.bs_min_max_pos[1][1]):
+            
+            # new_direction_numpy = self.rotate_vector_by_deg(
+            #     np.array(self.moving_users[user_node_id]), 180)
+            
+            new_direction_numpy = self.get_vector_to_canvas_center(np.array([self.son.graph.nodes.data()[user_node_id]["pos_x"], self.son.graph.nodes.data()[user_node_id]["pos_y"]]))
+            
             self.moving_users[user_node_id] = (new_direction_numpy[0], new_direction_numpy[1])
 
         while (self.check_direction_valid(user_node_id, moving_vector) is False):
@@ -445,25 +507,52 @@ class Network_Simulation_State():
         measurements_object.append(self.running_ticks)
         measurements_object.append(current_avg_user_degree)
         measurements_object.append(self.ngen_total)
+        
+        get_average_dl_datarate_and_variance_result = self.son.get_average_dl_datarate_and_variance()
+        # add user_dl_datarate variance
+        measurements_object.append(get_average_dl_datarate_and_variance_result[1])
+        # add user_dl_datarate interquartile range
+        measurements_object.append(get_average_dl_datarate_and_variance_result[2])
+        # add user_dl_datarate lower quartile median
+        measurements_object.append(get_average_dl_datarate_and_variance_result[3])
+        # add user_dl_datarate total median
+        measurements_object.append(get_average_dl_datarate_and_variance_result[4])
+        # add user_dl_datarate upper median
+        measurements_object.append(get_average_dl_datarate_and_variance_result[5])
+        # add user_dl_datarate min value
+        measurements_object.append(get_average_dl_datarate_and_variance_result[6])
+        # add user_dl_datarate max value
+        measurements_object.append(get_average_dl_datarate_and_variance_result[7])
 
         if ObjectiveEnum.AVG_DL_RATE.value in self.config_params["objectives"]:
-            measurements_object.append(self.son.get_average_dl_datarate())
+            measurements_object.append(-get_average_dl_datarate_and_variance_result[0])
         if ObjectiveEnum.POWER_CONSUMPTION.value in self.config_params["objectives"]:
             measurements_object.append(self.son.get_total_energy_consumption())
         if ObjectiveEnum.AVG_ENERGY_EFFICENCY.value in self.config_params["objectives"]:
-            measurements_object.append(self.son.get_avg_energy_efficiency())
+            measurements_object.append(-self.son.get_avg_energy_efficiency())
         if ObjectiveEnum.TOTAL_ENERGY_EFFICIENCY.value in self.config_params["objectives"]:
-            measurements_object.append(self.son.get_total_energy_consumption())
+            measurements_object.append(-self.son.get_total_energy_efficiency())
         if ObjectiveEnum.AVG_LOAD.value in self.config_params["objectives"]:
             measurements_object.append(self.son.get_average_network_load())
         if ObjectiveEnum.AVG_RSSI.value in self.config_params["objectives"]:
-            measurements_object.append(self.son.get_average_rssi())
+            measurements_object.append(-self.son.get_average_rssi())
         if ObjectiveEnum.AVG_SINR.value in self.config_params["objectives"]:
-            measurements_object.append(self.son.get_average_sinr())
+            measurements_object.append(-self.son.get_average_sinr())
         if ObjectiveEnum.OVERLOAD.value in self.config_params["objectives"]:
             measurements_object.append(self.son.get_avg_overlad())
         
         self.objective_history.append(measurements_object)
+
+
+        if self.config_params["node_history"]:
+            self.node_history.append(list(self.son.graph.nodes.data()))
+
+        if self.config_params["objectivespace_history"]:
+            self.objectivespace_history.append(self.current_pop_objectivespace)
+
+        if self.config_params["decisionspace_history"]:
+            self.decisionspace_history.append(self.current_pop_decisionspace)
+
         self.dt_since_last_history_update = 0
         self.ticks_since_last_history_update = 0
 
@@ -510,6 +599,18 @@ class Network_Simulation_State():
 
     def start_evo(self, new_config_name):
 
+
+        min_x, min_y, max_x, max_y =  20000, 20000, -1, -1 
+
+        for _, bs_node in enumerate(filter(self.son.filter_bs_nodes, self.son.graph.nodes.data())):
+            min_x = bs_node[1]["pos_x"] if bs_node[1]["pos_x"] < min_x else min_x
+            min_y = bs_node[1]["pos_y"] if bs_node[1]["pos_y"] < min_y else min_y
+            
+            max_x = bs_node[1]["pos_x"] if bs_node[1]["pos_x"] > max_x else max_x
+            max_y = bs_node[1]["pos_y"] if bs_node[1]["pos_y"] > max_y else max_y
+
+        self.bs_min_max_pos = ((min_x, min_y),(max_x, max_y))
+
         if not os.path.exists(self.get_current_network_directory()):
             return ErrorEnum.NETWORK_MISSING.value
         
@@ -547,7 +648,9 @@ class Network_Simulation_State():
                 self.config_params["mutation_prob"],
                 self.config_params["crossover_prob"],
                 self.config_params["mutation_prob_var"],
-                None
+                None,
+                self.config_params["objectivespace_history"],
+                self.config_params["decisionspace_history"]
             ))
             self.optimization_process.start()
 
@@ -572,7 +675,7 @@ class Network_Simulation_State():
                 self.onFinishedEvent("message")
 
     def reset_queue_flags(self):
-        self.queue_flags = {"activation_dict": False, "objective_space": False,
+        self.queue_flags = {"activation_dict": False, "objective_space": False, "decision_space": False,
                             "just_resetted": False,
                             "n_gen_since_last_fetch": 0, "n_gen": 0,
                             "n_gen_since_last_reset": 0}
@@ -586,6 +689,11 @@ class Network_Simulation_State():
         self.optimization_running = False
         self.dt_since_last_evo_reset = 0
         self.objective_history = []
+        self.node_history = []
+        self.decisionspace_history = []
+        self.current_pop_decisionspace = []
+        self.objectivespace_history = []
+        self.current_pop_objectivespace = []
         self.ngen_since_last_evo_reset = 0
         self.running_time_in_s = 0
         self.running_ticks = 0
@@ -628,9 +736,10 @@ class Network_Simulation_State():
                         # update dropdowns after normal completion and static mode
                         self.finished = True
                     
-                    if callback_obj["activation_dict"] is not False and callback_obj["objective_space"] is not False:
+                    if callback_obj["activation_dict"] is not False:
                         self.queue_flags["activation_dict"] = callback_obj["activation_dict"]
                         self.queue_flags["objective_space"] = callback_obj["objective_space"]
+                        self.queue_flags["decision_space"] = callback_obj["decision_space"]
 
                     self.queue_flags["n_gen_since_last_fetch"] = callback_obj["n_gen_since_last_fetch"]
 
@@ -644,9 +753,20 @@ class Network_Simulation_State():
 
 
                 # react to queue messages
-                if self.queue_flags["activation_dict"] is not False and self.queue_flags["objective_space"] is not False:
+                if self.queue_flags["activation_dict"] is not False:
 
                     self.activation = self.queue_flags["activation_dict"]
+                    
+                    if self.queue_flags["objective_space"] is not False:
+                        self.current_pop_objectivespace = self.queue_flags["objective_space"]
+                    else:
+                        self.current_pop_objectivespace = []
+                    
+                    if self.queue_flags["decision_space"] is not False:
+                        self.current_pop_decisionspace = self.queue_flags["decision_space"]
+                    else:
+                        self.current_pop_decisionspace = []
+
                     self.dt_since_last_activation_profile_fetch = 0
 
                 if self.queue_flags["n_gen_since_last_fetch"] is not False:
@@ -661,6 +781,7 @@ class Network_Simulation_State():
                
                 # apply current activation and repair it -> greedy assign for assignemnts which dont match the proposal
                 if len(self.activation) > 0:
+                    
                     if self.config_params["greedy_to_moving"]:
                         self.activation = self.son.apply_activation_dict(
                             self.activation, update_network_attributes=True,

@@ -35,6 +35,8 @@ class ObjectiveEnum(Enum):
     POWER_CONSUMPTION = "POWER_CONSUMPTION"
     AVG_RSSI = "AVG_RSSI"
     AVG_DL_RATE = "AVG_DL_RATE"
+    DL_RATE_VARIANCE = "DL_RATE_VARIANCE"
+    IQR_RANGE = "IQR_RANGE"
     TOTAL_ENERGY_EFFICIENCY = "TOTAL_ENERGY_EFFICIENCY"
     AVG_ENERGY_EFFICENCY = "AVG_ENERGY_EFFICIENCY"
 
@@ -141,7 +143,7 @@ def select_solution(son: Son, decision_space, objective_space: np.ndarray,
     
     if len(weights) != objective_space.shape[1]:
         weights = [1/objective_space.shape[1] for _ in range(objective_space.shape[1])]
-
+        
     weights_np= np.array(weights)
 
     i = decomp.do(nF, 1/weights_np).argmin()
@@ -196,8 +198,16 @@ class SonProblemElementWise(ElementwiseProblem):
             objectives = np.append(objectives, -self.son_original.get_avg_energy_efficiency())
         if ObjectiveEnum.AVG_SINR.value in self.obj_dict:
             objectives = np.append(objectives, -self.son_original.get_average_sinr())
-        if ObjectiveEnum.AVG_DL_RATE.value in self.obj_dict:
-            objectives = np.append(objectives, -self.son_original.get_average_dl_datarate())
+        if ObjectiveEnum.AVG_DL_RATE.value in self.obj_dict or ObjectiveEnum.DL_RATE_VARIANCE.value in self.obj_dict or ObjectiveEnum.IQR_RANGE.value:
+            average_dl_datarete_and_variance_result = self.son_original.get_average_dl_datarate_and_variance()
+
+            if ObjectiveEnum.AVG_DL_RATE.value in self.obj_dict:
+                objectives = np.append(objectives, -average_dl_datarete_and_variance_result[0])
+            if ObjectiveEnum.DL_RATE_VARIANCE.value  in self.obj_dict:
+                objectives = np.append(objectives, average_dl_datarete_and_variance_result[1])
+            if ObjectiveEnum.IQR_RANGE.value in self.obj_dict:
+                objectives = np.append(objectives, average_dl_datarete_and_variance_result[2])
+
         if ObjectiveEnum.AVG_RSSI.value in self.obj_dict:
             objectives = np.append(objectives, -self.son_original.get_average_rssi())
         out["F"] = np.array(objectives)
@@ -231,6 +241,11 @@ class SonRepairSampling(Sampling):
         # convert seed_pop to decision space and repair it to match current topology
         seed_pop_decision_space = convert_design_space_pop_to_decision_space_pop(
             problem.son_original, self.seed_pop_design_space, repair=True)
+        
+        # insert one individuum with  greedy sampling
+        greedy_activation_design_space = problem.son_original.find_activation_profile_greedy_user()
+        greedy_activation_decision_space = convert_design_space_ind_to_decision_space_ind(problem.son_original, greedy_activation_design_space)
+        seed_pop_decision_space[-1] = greedy_activation_decision_space
         
         return seed_pop_decision_space
 
@@ -301,10 +316,6 @@ class SonMutation(Mutation):
 
         for ind_index, ind_decision_space in enumerate(Xp):
             for variable_index, active_bs in enumerate(ind_decision_space):
-                # print(possible_activations_dict[possible_activations_list[variable_index]])
-                # print(active_bs)
-                # print(flip[ind_index][variable_index])
-                # print("------")
                 new_active_bs = active_bs
                 if flip[ind_index][variable_index]:
                     while active_bs == new_active_bs and len(possible_activations_dict[possible_activations_list[variable_index]]) > 1:
@@ -359,6 +370,8 @@ class MyCallback(Callback):
 
     def __init__(self, pymoo_message_queue: multiprocessing.Queue,
                  editor_message_queue: multiprocessing.Queue, son: Son, running_mode: str,
+                 decisionspace_history: bool,
+                 objectivespace_history: bool,
                  total_gen=0) -> None:
         super().__init__()
 
@@ -373,11 +386,10 @@ class MyCallback(Callback):
         self.n_gen_since_last_fetch = 0
         self.n_gen_since_last_reset = 0
         self.trigger_terminate = False
+        self.decisionspace_history = decisionspace_history
+        self.objectivespace_history = objectivespace_history
 
     def notify(self, algorithm: Algorithm):
-
-        # TODO adjust decision space boundaies here and don't restart optimization
-        # TODO repair current population here
 
         if self.running_mode == RunningMode.LIVE.value or self.running_mode == RunningMode.STATIC.value:
             # update counter
@@ -404,15 +416,17 @@ class MyCallback(Callback):
 
             activation_dict = select_solution(
                 self.son,
-                decision_space=algorithm.pop.get("X"),
-                objective_space=algorithm.pop.get("F"))
+                decision_space=algorithm.opt.get("X"),
+                objective_space=algorithm.opt.get("F"))
+            
             
             self.n_gen_since_last_fetch = 0
             
             if self.pymoo_message_queue.empty() and not self.trigger_terminate:
                 self.pymoo_message_queue.put(
                     {"activation_dict": activation_dict,
-                        "objective_space": algorithm.pop.get("F"),
+                        "objective_space": algorithm.opt.get("F").tolist() if self.objectivespace_history == True else False,
+                        "decision_space": algorithm.opt.get("X").tolist() if self.decisionspace_history == True else False,
                         "finished": False,
                         "just_resetted": True if self.n_gen_since_last_reset == 0 else False,
                         "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
@@ -425,7 +439,8 @@ class MyCallback(Callback):
                 self.trigger_terminate = False
                 self.pymoo_message_queue.put(
                     {"activation_dict": activation_dict,
-                        "objective_space": algorithm.pop.get("F"),
+                         "objective_space": algorithm.opt.get("F").tolist() if self.objectivespace_history == True else False,
+                        "decision_space": algorithm.opt.get("X").tolist() if self.decisionspace_history == True else False,
                         "finished": False,
                         "just_resetted": True if self.n_gen_since_last_reset == 0 else False,
                         "n_gen_since_last_fetch": self.n_gen_since_last_fetch,
@@ -454,7 +469,10 @@ def start_optimization(
         mutation_prob: float = 0.9,  # 0.9 is pymoo default
         crossover_prob: float = 0.9,  # 0.9 is pymoo default
         mutation_prob_var = None,
-        seed=None):
+        seed=None,
+        objectivespace_history=False,
+        decisionspace_history=False
+        ):
 
     pymooAlgorithm = None
     samplingConfig = None
@@ -528,12 +546,13 @@ def start_optimization(
     else:
         termination_obj = MyNoTermination()
 
-
     result = minimize(sonProblem, pymooAlgorithm, termination=termination_obj, seed=seed,
                       verbose=verbose, save_history=history,
                       callback=MyCallback(
                           pymoo_message_queue=pymoo_message_queue,
                           editor_message_queue=editor_message_queue, son=son_obj,
+                          objectivespace_history=objectivespace_history,
+                          decisionspace_history=decisionspace_history,
                           running_mode=running_mode))
     total_gen = 0
     if running_mode == RunningMode.LIVE.value:
@@ -587,6 +606,8 @@ def start_optimization(
                 callback=MyCallback(
                     pymoo_message_queue=pymoo_message_queue,
                     editor_message_queue=editor_message_queue,
+                    objectivespace_history=objectivespace_history,
+                    decisionspace_history=decisionspace_history,
                     son=son_obj,
                     running_mode=running_mode, total_gen=total_gen))
 
@@ -633,16 +654,19 @@ def start_optimization(
         # convert designspae result to adjacency json
         for i, individuum in enumerate(designSpace):
             sonProblem.son_original.apply_activation_dict(individuum)
+            get_average_dl_datarate_and_variance_result = sonProblem.son_original.get_average_dl_datarate_and_variance()
             objective_result_dic["results"].append(
                 ("ind_result_" +
                  str(i + 1),
-                 {ObjectiveEnum.AVG_SINR.name: sonProblem.son_original.get_average_sinr(),
-                  ObjectiveEnum.AVG_RSSI.name: sonProblem.son_original.get_average_rssi(),
+                 {ObjectiveEnum.AVG_SINR.name: -sonProblem.son_original.get_average_sinr(),
+                  ObjectiveEnum.AVG_RSSI.name: -sonProblem.son_original.get_average_rssi(),
                   ObjectiveEnum.AVG_LOAD.name: sonProblem.son_original.get_average_network_load(),
                   ObjectiveEnum.POWER_CONSUMPTION.name: sonProblem.son_original.get_total_energy_consumption(),
-                  ObjectiveEnum.TOTAL_ENERGY_EFFICIENCY.name: sonProblem.son_original.get_total_energy_efficiency(),
-                  ObjectiveEnum.AVG_ENERGY_EFFICENCY.name: sonProblem.son_original.get_avg_energy_efficiency(),
-                  ObjectiveEnum.AVG_DL_RATE.name: sonProblem.son_original.get_average_dl_datarate()}))
+                  ObjectiveEnum.TOTAL_ENERGY_EFFICIENCY.name: -sonProblem.son_original.get_total_energy_efficiency(),
+                  ObjectiveEnum.AVG_ENERGY_EFFICENCY.name: -sonProblem.son_original.get_avg_energy_efficiency(),
+                  ObjectiveEnum.AVG_DL_RATE.name: -get_average_dl_datarate_and_variance_result[0],
+                  ObjectiveEnum.DL_RATE_VARIANCE.name: get_average_dl_datarate_and_variance_result[1]
+                  }))
 
             sonProblem.son_original.save_json_adjacency_graph_to_file(
                 filename=folder_path + "ind_result_" + str(i + 1) + ".json")
@@ -662,7 +686,8 @@ def start_optimization(
         objective_space=result.F)
     pymoo_message_queue.put(
         {"activation_dict": activation_dict,
-            "objective_space": result.F,
+            "objective_space": result.F.tolist() if objectivespace_history == True else False,
+            "decision_space":  result.X.tolist() if decisionspace_history == True else False,
             "finished": True,
             "n_gen_since_last_fetch": 0,
             "n_gen_since_last_reset": 0,

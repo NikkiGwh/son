@@ -4,6 +4,7 @@ from enum import Enum
 from networkx.readwrite import json_graph
 import networkx as nx
 import numpy as np
+from sklearn.metrics import max_error
 class CellOrderTwo(Enum):
     RANDOM = 1
     HIGHEST_DEGREE_FIRST = 4
@@ -26,45 +27,45 @@ class NodeType(Enum):
     PICO = "pico"
 
 default_node_params = {
-   "macro": {
-        "type": "macro",
-        "tx_power": 31.622776601683793,
-        "static_power": 450,
-        "standby_power": 0,
-        "antennas": 16,
-        "frequency": 12.0,
-        "wave_length": 0.02498270483333333,
-        "channel_bandwidth": 100000
+"macro": {
+    "type": "macro",
+    "tx_power": 31.622776601683793, # i n watts
+    "static_power": 450, # in watts
+    "standby_power": 0,
+    "antennas": 16,
+    "frequency": 15.0, # in GHz
+    "wave_length": 0.019986163866666667, # in m
+    "channel_bandwidth": 80000000 # in Hz
   },
- "micro": {
+  "micro": {
     "type": "micro",
-    "tx_power": 31.622776601683793,
+    "tx_power": 19.95262314968879,
     "static_power": 100,
     "standby_power": 0,
     "antennas": 4,
     "frequency": 26.0,
     "wave_length": 0.011530479153846154,
-    "channel_bandwidth": 400000
+    "channel_bandwidth": 400000000
   },
   "femto": {
-        "type": "micro",
-        "tx_power": 31.622776601683793,
-        "static_power": 100,
-        "standby_power": 0,
-        "antennas": 4,
-        "frequency": 20,
-        "wave_length": 0.01498962,
-        "channel_bandwidth": 400000
+    "type": "micro",
+    "tx_power": 31.622776601683793,
+    "static_power": 100,
+    "standby_power": 0,
+    "antennas": 4,
+    "frequency": 20,
+    "wave_length": 0.01498962,
+    "channel_bandwidth": 400000000
   },
   "pico": {
-         "type": "micro",
-        "tx_power": 31.622776601683793,
-        "static_power": 100,
-        "standby_power": 0,
-        "antennas": 4,
-        "frequency": 20,
-        "wave_length": 0.01498962,
-        "channel_bandwidth": 400000
+    "type": "micro",
+    "tx_power": 31.622776601683793,
+    "static_power": 100,
+    "standby_power": 0,
+    "antennas": 4,
+    "frequency": 20,
+    "wave_length": 0.01498962,
+    "channel_bandwidth": 400000000
   },
     "cell": {
         "type": "cell",
@@ -77,7 +78,7 @@ class Son:
     def __init__(self, adjacencies_file_name: str = "", parameter_config_file_name: str = "") -> None:
 
         # this is -80 dbm
-        self.min_rssi = 1.0000000000000001e-11
+        self.min_rssi = 1e-11
         self.max_cos = math.cos(math.pi / 4)
         self.network_node_params = default_node_params
         # initialize network
@@ -119,10 +120,11 @@ class Son:
 
     def update_network_attributes(self):
         """ update all dynamic node and edge attributes in the right order
-            important !! before that you have set activations for the edges 
+            important !! before that you have set activations for all the edges 
         """
-        self.update_user_node_attributes()
+
         self.update_bs_node_attributes()
+        self.update_user_node_attributes()
         # self.update_user_node_dl_datarate()
         # self.update_edge_attributes()
 
@@ -136,32 +138,18 @@ class Son:
                 filter(self.filter_bs_nodes, self.graph.nodes.data())):
 
             connected_users = [x[0] for x in self.graph[bs_node[0]].items() if x[1]["active"]]
-            if len(connected_users) == 0:
-                # calculation for inactive users
-                bs_node[1]["active"] = False
-                self.graph.nodes[bs_node[0]]["total_power"] = self.network_node_params[bs_node[1][
-                    "type"]]["standby_power"]
-               # self.graph.nodes[bs_node[0]]["energy_efficiency"] = 0
-                bs_node[1]["traffic"] = 0
-                bs_node[1]["load"] = 0
-            else:
-                bs_node[1]["active"] = True
+            count_connected_users = len(connected_users)
 
-        # calculation for active bs
-        for _, bs_node in enumerate(filter(self.filter_active_bs_nodes, self.graph.nodes.data())):
-            traffic_sum = 0.0
-            # calculate total traffic for bs depending on current connected users -> per user add 1
-            for _, user_edge in enumerate(self.graph[bs_node[0]].items()):
-                if user_edge[1]["active"] is True:
-                    traffic_sum += 1
 
-            # set traffic attribute
-            bs_node[1]["traffic"] = traffic_sum
+            bs_node[1]["active"] = True if count_connected_users > 0 else False
+            bs_node[1]["load"] = 0
+             # set traffic attribute
+            bs_node[1]["traffic"] = count_connected_users
             # set load attribute
-            bs_node[1]["load"] = traffic_sum / self.network_node_params[bs_node[1]
-                                                                        ["type"]]["antennas"]if traffic_sum > 0 else 0
+            bs_node[1]["load"] = count_connected_users / self.network_node_params[bs_node[1]["type"]]["antennas"]
             # calculate total power consumption for bs -> call only after traffic and load estimations are done
-            bs_node[1]["total_power"] = self.get_total_bs_power(bs_node[0])
+            bs_node[1]["total_power"] = self.get_total_bs_power(bs_node[0]) if count_connected_users > 0 else self.network_node_params[bs_node[1]["type"]]["standby_power"]
+            
 
     def update_user_node_attributes(self):
         """ update dynamic user_node attributes depending on active edge (sinr, rssi)
@@ -171,8 +159,8 @@ class Son:
         for _, user_node in enumerate(filter(self.filter_user_nodes, self.graph.nodes.data())):
             user_node[1]["sinr"] = self.get_sinr(user_node[0])
             connected_bs = self.get_connected_bs_nodeid(user_node[0])
-            user_node[1]["rssi"] = self.get_rssi_cell(
-                user_node[0], (user_node[0], connected_bs)) if connected_bs is not None else 0
+            user_node[1]["rssi"] = self.get_rssi_cell(user_node[0], (user_node[0], connected_bs)) if connected_bs is not None else 0
+            user_node[1]["dl_datarate"] = self.get_dl_datarate_user(user_node[0])
 
     # def update_user_node_dl_datarate(self):
     #     """updates downlink data rate for users -> call after update_user_nodes and update_bs_nodes"""
@@ -291,21 +279,25 @@ class Son:
 
     ################### network metric helpers ######################
 
-    def get_dl_datarate_user(self, cell_id: str):
+    def get_dl_datarate_user(self, user_id: str):
         """
         call after bs_nodes and user_nodes were updated
         """
-        connected_bs = self.get_connected_bs_nodeid(cell_id)
+        connected_bs = self.get_connected_bs_nodeid(user_id)
         if (connected_bs is None):
             return 0
         connected_bs_type = self.graph.nodes[connected_bs]["type"]
         channel_bandwidth = self.network_node_params[connected_bs_type]["channel_bandwidth"]
-        sinr = self.graph.nodes[cell_id]["sinr"]
+        sinr = self.graph.nodes[user_id]["sinr"]
         channel_capacity = channel_bandwidth * math.log(1+sinr, 2)
-        factor = self.network_node_params[connected_bs_type]["antennas"] / self.graph.nodes[
-            connected_bs]["traffic"] if self.graph.nodes[connected_bs]["load"] > 1 else 1
+        factor = 1 / self.graph.nodes[connected_bs]["load"] if self.graph.nodes[connected_bs]["load"] > 1 else 1
+       
+        # wave_length = self.network_node_params[connected_bs_type]["wave_length"]
+        distance = self.graph.nodes[user_id]["distance"]
+        # distance_factor = math.pow((wave_length / (4*math.pi*distance)), 2)
+        distance_factor = math.exp(-distance/3000)
 
-        return channel_capacity * factor
+        return round(channel_capacity * factor * distance_factor, 6)
 
     def get_total_bs_power(self, bs_node_id: str):
         bs_type = self.graph.nodes[bs_node_id]["type"]
@@ -338,6 +330,7 @@ class Son:
 
     def get_sinr(self, cell_id: str):
 
+        # only calculate if the activation profile for the whole network was set before
         # calculate interfering signals for cell_id
         # only bs nodes in range of cell have edge -> so no filtering required
         # only bs nodes which transmitt at same frequency (same type) interfer each others signal
@@ -348,14 +341,15 @@ class Son:
             return 0
         interference_signal = 0
         for _, bs_in_range_id in enumerate(self.graph[cell_id]):
-            if self.graph.nodes[bs_in_range_id]["type"] == self.graph.nodes[connected_bs_id]["type"]:
+            if self.graph.nodes[bs_in_range_id]["type"] == self.graph.nodes[connected_bs_id]["type"] and bs_in_range_id != connected_bs_id :
                 for _, interfering_cell_id in enumerate(self.graph[bs_in_range_id]):
                     if self.graph[interfering_cell_id][bs_in_range_id]["active"] and interfering_cell_id != cell_id:
                         interference_signal += self.get_rssi_cell(
                             cell_id, (interfering_cell_id, bs_in_range_id))
 
         received_signal_power = self.get_rssi_cell(cell_id, (cell_id, connected_bs_id))
-        return received_signal_power / (interference_signal + received_signal_power)
+
+        return received_signal_power / (received_signal_power + interference_signal)
 
     def get_rssi_cell(
             self, user_id: str, beam: tuple[str, str],
@@ -381,11 +375,13 @@ class Son:
              self.graph.nodes.data()[user_id]["pos_y"] + moving_vector[1]),
             (self.graph.nodes.data()[beam[1]]["pos_x"],
              self.graph.nodes.data()[beam[1]]["pos_y"]))
+        self.graph.nodes[user_id]["distance"] = distance
         if distance == 0:
             # beacuse otherwise programm crashes if user is exactly on topof bs station
             return 0
         else:
             result_rssi = transmission_power * cos_beta * math.pow((wave_length / (4*math.pi*distance)), 2)
+
         return result_rssi
     
     def get_bs_type_range(self, bs_type: str):
@@ -492,7 +488,7 @@ class Son:
         for _, bs_node in enumerate(filter(self.filter_active_bs_nodes, self.graph.nodes.data())):
             energy_consumption += bs_node[1]["total_power"]
 
-        return energy_consumption
+        return round(energy_consumption, 4)
 
     def get_total_energy_efficiency(self):
         """get energy efficiency over all base stations, including dynamic, static and standby power consumption
@@ -553,20 +549,52 @@ class Son:
             count += 1
         return rssi_sum/count
 
-    def get_average_dl_datarate(self):
+    def get_average_dl_datarate_and_variance(self):
         """get average download datarate over all users
-
+        only call this after all node attributes were updated
         Returns:
-            average download datarate over all users
+            tuple (average download datarate over all users, variance)
+        """
+        dl_datarate_sum = 0
+        dl_rate_values = []
+        count = 0
+        for _, cell_node in enumerate(
+                filter(self.filter_user_nodes, self.graph.nodes.data())):
+            dl_datarate_sum += cell_node[1]["dl_datarate"]
+            dl_rate_values.append(cell_node[1]["dl_datarate"])
+            count += 1
+        avg_dl_datarate = dl_datarate_sum/count
+       
+        squared_difference = 0
+        for _, cell_node in enumerate(
+                filter(self.filter_user_nodes, self.graph.nodes.data())):
+            squared_difference += (avg_dl_datarate - cell_node[1]["dl_datarate"])**2
+        
+        variance_normal = 0
+        if avg_dl_datarate != 0:
+            variance_normal = squared_difference / avg_dl_datarate
+       
+        q75, q50, q25 = np.percentile(dl_rate_values, [75 ,50, 25], method="median_unbiased")
+        iqr_result = q75 - q25
+        max_dl_rate = np.amax(dl_rate_values)
+        min_dl_rate = np.amin(dl_rate_values)
+        return (avg_dl_datarate, variance_normal, iqr_result, q25, q50, q75, min_dl_rate, max_dl_rate)
+    
+    def get_dl_datarate_variance(self):
+        """ returns the variance of the dl_datarate over all user devices
+        only call this after all node attributes were updated
+        Returns:
+            varaince of the dl_datarate over all user devices
         """
         dl_datarate_sum = 0
         count = 0
         for _, cell_node in enumerate(
                 filter(self.filter_user_nodes, self.graph.nodes.data())):
-            dl_datarate_sum += self.get_dl_datarate_user(cell_node[0])
+            dl_datarate_sum += cell_node[1]["dl_datarate"]
             count += 1
 
         return dl_datarate_sum/count
+
     
     def get_average_userNode_degree(self):
         #TODO check if this is right
@@ -581,6 +609,7 @@ class Son:
             self, user_id: str, update_network_attributes=False, set_edge_activation=False):
         best_bs_id = ""
         best_rssi = -1
+
         for _, bs_id in enumerate(self.graph[user_id]):
             if set_edge_activation:
                 self.graph[user_id][bs_id]["active"] = False
@@ -613,7 +642,7 @@ class Son:
         """
         activation_dict: dict[str, str] = {}
         for _, user_node in enumerate(filter(self.filter_user_nodes, self.graph.nodes.data())):
-            best_bs_id = self.greedy_assign_user_to_bs(user_node[0], set_edge_activation=True)
+            best_bs_id = self.greedy_assign_user_to_bs(user_node[0], set_edge_activation=False)
             activation_dict[user_node[0]] = best_bs_id
             
         return activation_dict

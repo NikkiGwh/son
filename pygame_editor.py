@@ -208,12 +208,13 @@ class Editor():
 
         avg_sinr: float = self.net_sim.son.get_average_sinr()
         avg_rssi: float = self.net_sim.son.get_average_rssi()
-        avg_dl_rate: float = self.net_sim.son.get_average_dl_datarate()
+        avg_dl_rate: float = self.net_sim.son.get_average_dl_datarate_and_variance()[0]
+        dl_rate_variance: float = self.net_sim.son.get_average_dl_datarate_and_variance()[1]
         avg_load: float = self.net_sim.son.get_average_network_load()
         total_energy_efficiency: float = self.net_sim.son.get_total_energy_efficiency()
         avg_energy_efficiency = self.net_sim.son.get_avg_energy_efficiency()
         network_energy_consumption: float = self.net_sim.son.get_total_energy_consumption()
-        objective_text = "user devices<br>avg_rssi: " + str(avg_rssi) + "<br>avg_sinr: " + str(avg_sinr) + "<br>avg_dl_rate: " + str(avg_dl_rate) + "<br><br>base stations<br>avg_load %: " + str(
+        objective_text = "user devices<br>avg_rssi: " + str(avg_rssi) + "<br>avg_sinr: " + str(avg_sinr) + "<br>avg_dl_rate: " + str(avg_dl_rate) + "<br>dl_rate_variance: " + str(dl_rate_variance) +  "<br><br>base stations<br>avg_load %: " + str(
             avg_load) + "<br>total_energy_consumption: " + str(network_energy_consumption) + "<br>total_energy_efficiency: " + str(total_energy_efficiency) + "<br>avg_energy_efficiency: " + str(avg_energy_efficiency)
 
         self.info_text_box_objectives.set_text(objective_text)
@@ -284,6 +285,11 @@ class Editor():
     def onpress_generate_user_nodes(self):
         percentage = float(self.input_generate_user_nodes.get_text())
         self.net_sim.generate_user_nodes(percentage)
+        self.update_network_info_lables()
+    
+    def onpress_generate_micro_nodes(self):
+        bs_count = int(self.input_generate_micro_nodes.get_text())
+        self.net_sim.generate_bs_nodes(bs_count, NodeType.MICRO)
         self.update_network_info_lables()
 
     def on_entry_changed(self, event: pygame.event.Event):
@@ -540,6 +546,14 @@ class Editor():
             container=self.ui_container)
         self.input_generate_user_nodes = pygame_gui.elements.UITextEntryLine( pygame.Rect((520, 260), (40, 30)), self.manager, self.ui_container,initial_text= "100")
         self.input_generate_user_nodes.set_allowed_characters(text_input_float_number_type_characters)
+       
+        self.generate_micro_nodes_button= pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
+            (320, 290),
+            (-1, 30)),
+            text="generate micro cells %", manager=self.manager,
+            container=self.ui_container)
+        self.input_generate_micro_nodes = pygame_gui.elements.UITextEntryLine( pygame.Rect((520, 290), (40, 30)), self.manager, self.ui_container,initial_text= "4")
+        self.input_generate_micro_nodes.set_allowed_characters(text_input_float_number_type_characters)
         # network params
 
         self.input_antennas_label = pygame_gui.elements.UILabel(pygame.Rect(
@@ -980,6 +994,8 @@ class Editor():
                         self.onpress_apply_params_from_ui()
                     if event.ui_element == self.generate_user_nodes_butotn:
                         self.onpress_generate_user_nodes()
+                    if event.ui_element == self.generate_micro_nodes_button:
+                        self.onpress_generate_micro_nodes()
                     if event.ui_element == self.save_button:
                         self.onpress_save_network()
                     if event.ui_element == self.show_edges_toggle:
