@@ -19,7 +19,7 @@
   "moving_selection_name": "30percent",
   "running_mode": "LIVE",
   "node_history": false,
-  "objectivespace_history": false,
+  "objectivespace_history": true,
   "decisionspace_history": false,
   "crossover_prob": 0.9,
   "mutation_prob": 0.9,
