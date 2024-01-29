@@ -86,11 +86,11 @@ def load_templates(dpi=None, base_width_in_px = None):
 
     standard_legend_format = {
         "font": standard_font_format,
-        "yanchor": "top",
-        "orientation":"v",
-        "y":-0.35,
-        "xanchor":"left",
-        "x":0.01,
+        # "yanchor": "bottom",
+        # "xanchor":"left",
+        # "orientation":"h",
+        # "y":-0.2,
+        # "x":0,
         "grouptitlefont": standard_font_format
     }
     standard_title_format = {
@@ -106,7 +106,7 @@ def load_templates(dpi=None, base_width_in_px = None):
         "yaxis": standard_axis_format,
         "paper_bgcolor": "white",
         'plot_bgcolor': '#FFFFFF',
-        'margin': {'l': 50, 'r': 50, 't': 50, 'b': 50},
+        'margin': {'l': 50, 'r': 50, 't': 20, 'b': 30},
         'showlegend': True,
         'legend': standard_legend_format,
         'title': standard_title_format
