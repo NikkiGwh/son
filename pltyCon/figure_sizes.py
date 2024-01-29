@@ -6,10 +6,11 @@ Height are defined as fractions of the column width or the page height.
 """
 
 
-# Standard values from IEEE 2 column layout
+# Standard values from IEEE 2 column layout in mm
 column_width = 88.9
 page_height = 234.9
 column_separator = 6.35
+thesis_text_width = 159
 
 dimensions_by_type = {}
 
@@ -17,6 +18,7 @@ figure_widths = {
     "SC": 1 * column_width, 
     "HC": 1.5 * column_width,
     "DC": 2 * column_width + column_separator,
+    "TH": thesis_text_width
 }
 
 figure_heights = {
@@ -26,6 +28,11 @@ figure_heights = {
     "1-3rd-PH": 1/3 * page_height,
     "3-2nd-CW": 3/2 * column_width,
     "2-1st-CW": 2 * column_width,
+    
+    "1-1-TH": thesis_text_width,
+    "3-4-TH": thesis_text_width* 3/4,
+    "2-3-TH": thesis_text_width * 2/3,
+    "1-3-TH": thesis_text_width * 1/3,
 }
 
 for width_type, width  in figure_widths.items():
