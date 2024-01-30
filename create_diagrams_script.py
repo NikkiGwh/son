@@ -773,6 +773,7 @@ def create_avrg_hypervolume_ratio_dataset(
 
     if write_to_ratio_file:
         hv_ratio_list = np.average((hv_matrix / hv_baseline), axis=1 )
+        
         file_name = "./diagrams/avg_hypervolume_ratios.json"
 
         if os.path.exists(file_name):
@@ -1370,6 +1371,7 @@ for network_index, network in enumerate(experiments):
         subplots4x3 = make_subplots(
             rows=4,
             cols=3,
+            shared_yaxes=True,
             subplot_titles=list(experiments[network][mp_name])
             )
 
