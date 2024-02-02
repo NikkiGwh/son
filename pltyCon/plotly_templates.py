@@ -106,7 +106,7 @@ def load_templates(dpi=None, base_width_in_px = None):
         "yaxis": standard_axis_format,
         "paper_bgcolor": "white",
         'plot_bgcolor': '#FFFFFF',
-        'margin': {'l': 50, 'r': 50, 't': 20, 'b': 30},
+        'margin': {'l': 50, 'r': 50, 't': 20, 'b': 40},
         'showlegend': True,
         'legend': standard_legend_format,
         'title': standard_title_format
