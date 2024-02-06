@@ -1,7 +1,4 @@
-from logging import config
-from re import T
-from turtle import color
-from matplotlib.pyplot import box, show
+
 import plotly.graph_objects as go
 from pymoo.indicators.hv import Hypervolume
 from pymoo.decomposition.asf import ASF
@@ -17,6 +14,9 @@ template_one_diagram = "oscilloscope+TH--1-3-TH"
 template_subplot_diagrams = "oscilloscope+TH--3-4-TH"
 template_one_diagram_paretofront= template_one_diagram
 opacity_runs = 0.2
+greedy_color= "black"
+evo_color= "blue"
+runs_color = "#2cbcc4"
 datastore_directory_name = "datastore_thesis_4"
 
 loaded_dpi = load_templates(
@@ -297,7 +297,7 @@ def create_objective_diagrams(
                 name="run_i",
                 showlegend= True if index == 0 else False,
                 mode='lines',
-                line={"color": "blue", "width": lineWidth},
+                line={"color": runs_color,"width": lineWidth},
                 opacity=opacity_runs,
             ))
         fig3.add_trace(
@@ -307,7 +307,7 @@ def create_objective_diagrams(
                 name="run_i",
                 showlegend=True if index == 0 else False,
                 mode='lines',
-                line={"color": "blue", "width": lineWidth},
+                line={"color": runs_color, "width": lineWidth},
                 opacity=opacity_runs,
             ))
         
@@ -317,7 +317,7 @@ def create_objective_diagrams(
             y=objective_1_avrg_list,
             name="evo",
             mode='lines',
-            line={"color": "red", "width": lineWidth},
+            line={"color": evo_color, "width": lineWidth},
         ))
     fig2.add_trace(
         go.Scatter(
@@ -325,7 +325,7 @@ def create_objective_diagrams(
             y=base_line_objective_1_avrg_list,
             name="greedy",
             mode='lines',
-            line={ "color": "black", "width": lineWidth},
+            line={ "color": greedy_color, "width": lineWidth},
         ))
     fig3.add_trace(
             go.Scatter(
@@ -333,7 +333,7 @@ def create_objective_diagrams(
                 y=objective_2_avrg_list,
                 name="evo",
                 mode='lines',
-                line={ "color": "red", "width": lineWidth},
+                line={ "color": evo_color, "width": lineWidth},
             ))
     fig3.add_trace(
         go.Scatter(
@@ -341,7 +341,7 @@ def create_objective_diagrams(
             y=base_line_objective_2_avrg_list,
             name="greedy",
             mode='lines',
-            line={ "color": "black", "width": lineWidth},
+            line={ "color": greedy_color, "width": lineWidth},
         ))
     ## normalized objectives plot
     fig4 = go.Figure()
@@ -367,7 +367,7 @@ def create_objective_diagrams(
                 name="run_i",
                 showlegend=True if index == 0 else False,
                 mode='lines',
-                line={"color": "blue", "width": lineWidth},
+                line={"color": runs_color, "width": lineWidth},
                 opacity=opacity_runs,
             ))
         ###TODO delete###
@@ -378,7 +378,7 @@ def create_objective_diagrams(
                 name="run_i",
                 showlegend=False,
                 mode='lines',
-                line={"color": "blue", "width": lineWidth},
+                line={"color": runs_color, "width": lineWidth},
                 opacity=opacity_runs,
             ), row=1, col=col_index)
         
@@ -389,7 +389,7 @@ def create_objective_diagrams(
                 name="run_i",
                 showlegend=True if index == 0 else False,
                 mode='lines',
-                line={"color": "blue", "width": lineWidth},
+                line={"color": runs_color, "width": lineWidth},
                 opacity=opacity_runs,
             ))
         
@@ -400,7 +400,7 @@ def create_objective_diagrams(
                 name="run_i",
                 showlegend=False,
                 mode='lines',
-                line={"color": "blue", "width": lineWidth},
+                line={"color": runs_color, "width": lineWidth},
                 opacity=opacity_runs,
             ), row=2, col=col_index)
         
@@ -410,7 +410,7 @@ def create_objective_diagrams(
             y=objective_1_normalized_avrg_list,
             name="evo",
             mode='lines',
-            line={"color": "red", "width": lineWidth},
+            line={"color": evo_color, "width": lineWidth},
         ))
     ###TODO delete
     subplots4x3.add_trace(
@@ -419,7 +419,7 @@ def create_objective_diagrams(
             y=objective_1_normalized_avrg_list,
             name="evo",
             mode='lines',
-            line={"color": "red", "width": lineWidth},
+            line={"color": evo_color, "width": lineWidth},
         ), row=1, col=col_index
     )
     fig4.add_trace(
@@ -428,7 +428,7 @@ def create_objective_diagrams(
             y=base_line_objective_1_normalized_avrg_list,
             name="greedy",
             mode='lines',
-            line={"color": "black", "width": lineWidth},
+            line={"color": greedy_color, "width": lineWidth},
         ))
     ##TODO delete###
     subplots4x3.add_trace(
@@ -437,7 +437,7 @@ def create_objective_diagrams(
             y=base_line_objective_1_normalized_avrg_list,
             name="greedy",
             mode='lines',
-            line={"color": "black", "width": lineWidth},
+            line={"color": greedy_color, "width": lineWidth},
         ),
         row=1, col=col_index
     )
@@ -447,7 +447,7 @@ def create_objective_diagrams(
             y=objective_2_normalized_avrg_list,
             name="evo" ,
             mode='lines',
-            line={"color": "red", "width": lineWidth}
+            line={"color": evo_color, "width": lineWidth}
         ))
     ## TODO delete
     subplots4x3.add_trace(
@@ -456,7 +456,7 @@ def create_objective_diagrams(
             y=objective_2_normalized_avrg_list,
             name="evo" ,
             mode='lines',
-            line={"color": "red", "width": lineWidth}
+            line={"color": evo_color, "width": lineWidth}
         ), row=2, col=col_index
     )
     fig5.add_trace(
@@ -465,7 +465,7 @@ def create_objective_diagrams(
             y=base_line_objective_2_normalized_avrg_list,
             name="greedy",
             mode='lines',
-            line={"color": "black", "width": lineWidth}
+            line={"color": greedy_color, "width": lineWidth}
         ))
     ##TODO delete
     subplots4x3.add_trace(
@@ -474,7 +474,7 @@ def create_objective_diagrams(
             y=base_line_objective_2_normalized_avrg_list,
             name="greedy",
             mode='lines',
-            line={"color": "black", "width": lineWidth}
+            line={"color": greedy_color, "width": lineWidth}
         ), row=2, col=col_index
     )
         
@@ -625,7 +625,7 @@ def create_avrg_hypervolume_ratio_dataset(
                 mode='lines',
                 name= f"run_i",
                 showlegend=True if index == 0 else False,
-                line={"color": "blue", "width": lineWidth},
+                line={"color": runs_color, "width": lineWidth},
                 opacity=opacity_runs,
             ))
     fig1.add_trace(
@@ -633,7 +633,7 @@ def create_avrg_hypervolume_ratio_dataset(
             x=np.array(range(hv_matrix.shape[1])),
             y = hv_baseline,
             mode='lines',
-            line={"color": "black", "width": lineWidth},
+            line={"color": greedy_color, "width": lineWidth},
             name="greedy"
         )
     )
@@ -641,7 +641,7 @@ def create_avrg_hypervolume_ratio_dataset(
         go.Scatter(
             x=np.array(range(hv_matrix.shape[1])),
             y = np.average(hv_matrix, axis=0),
-            line={"color": "red", "width": lineWidth},
+            line={"color": evo_color, "width": lineWidth},
             mode='lines',
             name="evo"
         )
@@ -688,7 +688,7 @@ def create_avrg_hypervolume_ratio_dataset(
         x=np.array(range(hv_matrix.shape[1])),
         y=hv_baseline,
         mode='lines',
-        line={"color": "black", "width": lineWidth},
+        line={"color": greedy_color, "width": lineWidth},
         opacity=1,
         name="greedy",
     ))
@@ -698,7 +698,7 @@ def create_avrg_hypervolume_ratio_dataset(
         x=np.array(range(hv_matrix.shape[1])),
         y=hv_baseline,
         mode='lines',
-        line={"color": "black", "width": lineWidth},
+        line={"color": greedy_color, "width": lineWidth},
         opacity=1,
         name="greedy",
     ), row=3, col=col_index
@@ -709,7 +709,7 @@ def create_avrg_hypervolume_ratio_dataset(
             x=np.array(range(hv_matrix.shape[1])),
             y=np.average(hv_matrix, axis=0),
             mode='lines',
-            line={"color": "blue", "width": lineWidth},
+            line={"color": evo_color, "width": lineWidth},
             opacity=1,
             name= "evo",
         ))
@@ -719,7 +719,7 @@ def create_avrg_hypervolume_ratio_dataset(
             x=np.array(range(hv_matrix.shape[1])),
             y=np.average(hv_matrix, axis=0),
             mode='lines',
-            line={"color": "blue", "width": lineWidth},
+            line={"color": evo_color, "width": lineWidth},
             opacity=1,
             name= "evo",
         ), row=3, col=col_index
@@ -947,14 +947,14 @@ def create_box_plots_averaged(
                 y=np.sqrt(variance_list[index]),
                 name="evo",
                 mode='lines',
-                line={"color":"red", "width": lineWidth},
+                line={"color":evo_color, "width": lineWidth},
             ))
         fig_variance.add_trace(
             go.Scatter(
                 x=time_and_frames_list[:, 1],
                 y=np.sqrt(base_line_variance_list[index]),
                 name="greedy",
-                line={"color":"black", "width": lineWidth},
+                line={"color":greedy_color, "width": lineWidth},
                 mode='lines',
             ))
         fig_iqr.add_trace(
@@ -962,7 +962,7 @@ def create_box_plots_averaged(
                 x=time_and_frames_list[:, 1],
                 y=iqr_list[index],
                 name="evo",
-                line={"color":"red", "width": lineWidth},
+                line={"color":evo_color, "width": lineWidth},
                 mode='lines',
             ))
         fig_iqr.add_trace(
@@ -971,7 +971,7 @@ def create_box_plots_averaged(
                 y=base_line_iqr_list[index],
                 name="greedy",
                 mode='lines',
-                line={"color":"black", "width": lineWidth}
+                line={"color":greedy_color, "width": lineWidth}
             ))
         if show_diagram:
             fig_variance.show()
@@ -1192,7 +1192,7 @@ def create_pareto_history_plots(
                 y=[1.1],
                 mode='markers',
                 name= "reference point",
-                line={"color": "black"},
+                line={"color": greedy_color},
                 )
         )
     if export_diagrams:
@@ -1267,8 +1267,8 @@ def create_result_boxplots(prefix: str, show_diagram: bool, export_diagrams: boo
                     go.Box(
                         y=json_object[network][config_name],
                         boxpoints='outliers',
-                        marker_color="blue",
-                        line_color="blue",
+                        marker_color=evo_color,
+                        line_color=evo_color,
                         name=velocity,
                         line={"width": lineWidth}
                     ),
@@ -1302,225 +1302,237 @@ def remove_blank_page(directory_path:str):
             outfile.write(f)
 
 ######### main script #######
-def generate_diagrams():
-    experiments = {
-        "het_C50": {
-            "MP30": {
-                "het_C50_MP30_MS1,2ms_evo": "het_C50_MP30_MS1,2ms_greedy",
-                #"het_C50_MP30_MS1,2ms_evo_var": "het_C50_MP30_MS1,2ms_greedy",
-                "het_C50_MP30_MS7ms_evo": "het_C50_MP30_MS7ms_greedy",
-                "het_C50_MP30_MS14ms_evo": "het_C50_MP30_MS14ms_greedy",
-                #"het_C50_MP30_MS14ms_evo_var": "het_C50_MP30_MS14ms_greedy"
-            },
-            "MP70": { 
-                "het_C50_MP70_MS1,2ms_evo": "het_C50_MP70_MS1,2ms_greedy",
-                #"het_C50_MP70_MS1,2ms_evo_var": "het_C50_MP70_MS1,2ms_greedy",
-                "het_C50_MP70_MS7ms_evo": "het_C50_MP70_MS7ms_greedy",
-                "het_C50_MP70_MS14ms_evo": "het_C50_MP70_MS14ms_greedy",
-                #"het_C50_MP70_MS14ms_evo_var": "het_C50_MP70_MS14ms_greedy",
-            },
-        
-        "MP100":{
-            "het_C50_MP100_MS1,2ms_evo": "het_C50_MP100_MS1,2ms_greedy",
-                #"het_C50_MP100_MS1,2ms_evo_var": "het_C50_MP100_MS1,2ms_greedy",
-                "het_C50_MP100_MS7ms_evo": "het_C50_MP100_MS7ms_greedy",
-                "het_C50_MP100_MS14ms_evo": "het_C50_MP100_MS14ms_greedy",
-                #"het_C50_MP100_MS14ms_evo_var": "het_C50_MP100_MS14ms_greedy",
+experiments = {
+    "het_C50": {
+        "MP30": {
+            "het_C50_MP30_MS1,2ms_evo": "het_C50_MP30_MS1,2ms_greedy",
+            #"het_C50_MP30_MS1,2ms_evo_var": "het_C50_MP30_MS1,2ms_greedy",
+            "het_C50_MP30_MS7ms_evo": "het_C50_MP30_MS7ms_greedy",
+            "het_C50_MP30_MS14ms_evo": "het_C50_MP30_MS14ms_greedy",
+            #"het_C50_MP30_MS14ms_evo_var": "het_C50_MP30_MS14ms_greedy"
         },
+        "MP70": { 
+            "het_C50_MP70_MS1,2ms_evo": "het_C50_MP70_MS1,2ms_greedy",
+            #"het_C50_MP70_MS1,2ms_evo_var": "het_C50_MP70_MS1,2ms_greedy",
+            "het_C50_MP70_MS7ms_evo": "het_C50_MP70_MS7ms_greedy",
+            "het_C50_MP70_MS14ms_evo": "het_C50_MP70_MS14ms_greedy",
+            #"het_C50_MP70_MS14ms_evo_var": "het_C50_MP70_MS14ms_greedy",
         },
-        "het_C100": {
-            "MP30":{
-                "het_C100_MP30_MS1,2ms_evo": "het_C100_MP30_MS1,2ms_greedy",
-                #    "het_C100_MP30_MS1,2ms_evo_var": "het_C100_MP30_MS1,2ms_greedy",
-                "het_C100_MP30_MS7ms_evo": "het_C100_MP30_MS7ms_greedy",
-                "het_C100_MP30_MS14ms_evo": "het_C100_MP30_MS14ms_greedy",
-                #    "het_C100_MP30_MS14ms_evo_var": "het_C100_MP30_MS14ms_greedy",
-            },
-            "MP70":{
-                "het_C100_MP70_MS1,2ms_evo": "het_C100_MP70_MS1,2ms_greedy",
-                #    "het_C100_MP70_MS1,2ms_evo_var": "het_C100_MP70_MS1,2ms_greedy",
-                "het_C100_MP70_MS7ms_evo": "het_C100_MP70_MS7ms_greedy",
-                "het_C100_MP70_MS14ms_evo": "het_C100_MP70_MS14ms_greedy",
-                #    "het_C100_MP70_MS14ms_evo_var": "het_C100_MP70_MS14ms_greedy",
-            },
-            "MP100":{
-                "het_C100_MP100_MS1,2ms_evo": "het_C100_MP100_MS1,2ms_greedy",
-                #    "het_C100_MP100_MS1,2ms_evo_var": "het_C100_MP100_MS1,2ms_greedy",
-                "het_C100_MP100_MS7ms_evo": "het_C100_MP100_MS7ms_greedy",
-                "het_C100_MP100_MS14ms_evo": "het_C100_MP100_MS14ms_greedy",
-                #    "het_C100_MP100_MS14ms_evo_var": "het_C100_MP100_MS14ms_greedy",
-            },
+    
+    "MP100":{
+        "het_C50_MP100_MS1,2ms_evo": "het_C50_MP100_MS1,2ms_greedy",
+            #"het_C50_MP100_MS1,2ms_evo_var": "het_C50_MP100_MS1,2ms_greedy",
+            "het_C50_MP100_MS7ms_evo": "het_C50_MP100_MS7ms_greedy",
+            "het_C50_MP100_MS14ms_evo": "het_C50_MP100_MS14ms_greedy",
+            #"het_C50_MP100_MS14ms_evo_var": "het_C50_MP100_MS14ms_greedy",
+    },
+    },
+    "het_C100": {
+        "MP30":{
+            "het_C100_MP30_MS1,2ms_evo": "het_C100_MP30_MS1,2ms_greedy",
+            #    "het_C100_MP30_MS1,2ms_evo_var": "het_C100_MP30_MS1,2ms_greedy",
+            "het_C100_MP30_MS7ms_evo": "het_C100_MP30_MS7ms_greedy",
+            "het_C100_MP30_MS14ms_evo": "het_C100_MP30_MS14ms_greedy",
+            #    "het_C100_MP30_MS14ms_evo_var": "het_C100_MP30_MS14ms_greedy",
         },
-        "het_C150": {
-            "MP30":{
-                "het_C150_MP30_MS1,2ms_evo": "het_C150_MP30_MS1,2ms_greedy",
-                #    "het_C150_MP30_MS1,2ms_evo_var": "het_C150_MP30_MS1,2ms_greedy",
-                "het_C150_MP30_MS7ms_evo": "het_C150_MP30_MS7ms_greedy",
-                "het_C150_MP30_MS14ms_evo": "het_C150_MP30_MS14ms_greedy",
-                #    "het_C150_MP30_MS14ms_evo_var": "het_C150_MP30_MS14ms_greedy",
-            },
-        "MP70":{ 
-                "het_C150_MP70_MS1,2ms_evo": "het_C150_MP70_MS1,2ms_greedy",
-                #    "het_C150_MP70_MS1,2ms_evo_var": "het_C150_MP70_MS1,2ms_greedy",
-                "het_C150_MP70_MS7ms_evo": "het_C150_MP70_MS7ms_greedy",
-                "het_C150_MP70_MS14ms_evo": "het_C150_MP70_MS14ms_greedy",
-                #    "het_C150_MP70_MS14ms_evo_var": "het_C150_MP70_MS14ms_greedy",
-        },
-        "MP100":{
-                "het_C150_MP100_MS1,2ms_evo": "het_C150_MP100_MS1,2ms_greedy",
-                #    "het_C150_MP100_MS1,2ms_evo_var": "het_C150_MP100_MS1,2ms_greedy",
-                "het_C150_MP100_MS7ms_evo": "het_C150_MP100_MS7ms_greedy",
-                "het_C150_MP100_MS14ms_evo": "het_C150_MP100_MS14ms_greedy",
-                #    "het_C150_MP100_MS14ms_evo_var": "het_C150_MP100_MS14ms_greedy",
-        },
-        },
-        "hom_C50": {
-            "MP30":{
-                "hom_C50_MP30_MS1,2ms_evo": "hom_C50_MP30_MS1,2ms_greedy",
-                #    "hom_C50_MP30_MS1,2ms_evo_var": "hom_C50_MP30_MS1,2ms_greedy",
-                "hom_C50_MP30_MS7ms_evo": "hom_C50_MP30_MS7ms_greedy",
-                "hom_C50_MP30_MS14ms_evo": "hom_C50_MP30_MS14ms_greedy",
-                #    "hom_C50_MP30_MS14ms_evo_var": "hom_C50_MP30_MS14ms_greedy",
-            },
         "MP70":{
-                "hom_C50_MP70_MS1,2ms_evo": "hom_C50_MP70_MS1,2ms_greedy",
-                #    "hom_C50_MP70_MS1,2ms_evo_var": "hom_C50_MP70_MS1,2ms_greedy",
-                "hom_C50_MP70_MS7ms_evo": "hom_C50_MP70_MS7ms_greedy",
-                "hom_C50_MP70_MS14ms_evo": "hom_C50_MP70_MS14ms_greedy",
-                #    "hom_C50_MP70_MS14ms_evo_var": "hom_C50_MP70_MS14ms_greedy",
+            "het_C100_MP70_MS1,2ms_evo": "het_C100_MP70_MS1,2ms_greedy",
+            #    "het_C100_MP70_MS1,2ms_evo_var": "het_C100_MP70_MS1,2ms_greedy",
+            "het_C100_MP70_MS7ms_evo": "het_C100_MP70_MS7ms_greedy",
+            "het_C100_MP70_MS14ms_evo": "het_C100_MP70_MS14ms_greedy",
+            #    "het_C100_MP70_MS14ms_evo_var": "het_C100_MP70_MS14ms_greedy",
         },
         "MP100":{
-                "hom_C50_MP100_MS1,2ms_evo": "hom_C50_MP100_MS1,2ms_greedy",
-                #    "hom_C50_MP100_MS1,2ms_evo_var": "hom_C50_MP100_MS1,2ms_greedy",
-                "hom_C50_MP100_MS7ms_evo": "hom_C50_MP100_MS7ms_greedy",
-                "hom_C50_MP100_MS14ms_evo": "hom_C50_MP100_MS14ms_greedy",
-                #    "hom_C50_MP100_MS14ms_evo_var": "hom_C50_MP100_MS14ms_greedy",
+            "het_C100_MP100_MS1,2ms_evo": "het_C100_MP100_MS1,2ms_greedy",
+            #    "het_C100_MP100_MS1,2ms_evo_var": "het_C100_MP100_MS1,2ms_greedy",
+            "het_C100_MP100_MS7ms_evo": "het_C100_MP100_MS7ms_greedy",
+            "het_C100_MP100_MS14ms_evo": "het_C100_MP100_MS14ms_greedy",
+            #    "het_C100_MP100_MS14ms_evo_var": "het_C100_MP100_MS14ms_greedy",
         },
+    },
+    "het_C150": {
+        "MP30":{
+            "het_C150_MP30_MS1,2ms_evo": "het_C150_MP30_MS1,2ms_greedy",
+            #    "het_C150_MP30_MS1,2ms_evo_var": "het_C150_MP30_MS1,2ms_greedy",
+            "het_C150_MP30_MS7ms_evo": "het_C150_MP30_MS7ms_greedy",
+            "het_C150_MP30_MS14ms_evo": "het_C150_MP30_MS14ms_greedy",
+            #    "het_C150_MP30_MS14ms_evo_var": "het_C150_MP30_MS14ms_greedy",
         },
-        "hom_C100": {
-            "MP30":{
-                "hom_C100_MP30_MS1,2ms_evo": "hom_C100_MP30_MS1,2ms_greedy",
-                #    "hom_C100_MP30_MS1,2ms_evo_var": "hom_C100_MP30_MS1,2ms_greedy",
-                "hom_C100_MP30_MS7ms_evo": "hom_C100_MP30_MS7ms_greedy",
-                "hom_C100_MP30_MS14ms_evo": "hom_C100_MP30_MS14ms_greedy",
-                #    "hom_C100_MP30_MS14ms_evo_var": "hom_C100_MP30_MS14ms_greedy",
-            },
-        "MP70":{
-                "hom_C100_MP70_MS1,2ms_evo": "hom_C100_MP70_MS1,2ms_greedy",
-                #    "hom_C100_MP70_MS1,2ms_evo_var": "hom_C150_MP70_MS1,2ms_greedy",
-                "hom_C100_MP70_MS7ms_evo": "hom_C100_MP70_MS7ms_greedy",
-                "hom_C100_MP70_MS14ms_evo": "hom_C100_MP70_MS14ms_greedy",
-                #    "hom_C100_MP70_MS14ms_evo_var": "hom_C100_MP70_MS14ms_greedy",
+    "MP70":{ 
+            "het_C150_MP70_MS1,2ms_evo": "het_C150_MP70_MS1,2ms_greedy",
+            #    "het_C150_MP70_MS1,2ms_evo_var": "het_C150_MP70_MS1,2ms_greedy",
+            "het_C150_MP70_MS7ms_evo": "het_C150_MP70_MS7ms_greedy",
+            "het_C150_MP70_MS14ms_evo": "het_C150_MP70_MS14ms_greedy",
+            #    "het_C150_MP70_MS14ms_evo_var": "het_C150_MP70_MS14ms_greedy",
+    },
+    "MP100":{
+            "het_C150_MP100_MS1,2ms_evo": "het_C150_MP100_MS1,2ms_greedy",
+            #    "het_C150_MP100_MS1,2ms_evo_var": "het_C150_MP100_MS1,2ms_greedy",
+            "het_C150_MP100_MS7ms_evo": "het_C150_MP100_MS7ms_greedy",
+            "het_C150_MP100_MS14ms_evo": "het_C150_MP100_MS14ms_greedy",
+            #    "het_C150_MP100_MS14ms_evo_var": "het_C150_MP100_MS14ms_greedy",
+    },
+    },
+    "hom_C50": {
+        "MP30":{
+            "hom_C50_MP30_MS1,2ms_evo": "hom_C50_MP30_MS1,2ms_greedy",
+            #    "hom_C50_MP30_MS1,2ms_evo_var": "hom_C50_MP30_MS1,2ms_greedy",
+            "hom_C50_MP30_MS7ms_evo": "hom_C50_MP30_MS7ms_greedy",
+            "hom_C50_MP30_MS14ms_evo": "hom_C50_MP30_MS14ms_greedy",
+            #    "hom_C50_MP30_MS14ms_evo_var": "hom_C50_MP30_MS14ms_greedy",
         },
-        "MP100":{
-                "hom_C100_MP100_MS1,2ms_evo": "hom_C100_MP100_MS1,2ms_greedy",
-                #    "hom_C100_MP100_MS1,2ms_evo_var": "hom_C100_MP100_MS1,2ms_greedy",
-                "hom_C100_MP100_MS7ms_evo": "hom_C100_MP100_MS7ms_greedy",
-                "hom_C100_MP100_MS14ms_evo": "hom_C100_MP100_MS14ms_greedy",
-                #    "hom_C100_MP100_MS14ms_evo_var": "hom_C100_MP100_MS14ms_greedy",
-        }
+    "MP70":{
+            "hom_C50_MP70_MS1,2ms_evo": "hom_C50_MP70_MS1,2ms_greedy",
+            #    "hom_C50_MP70_MS1,2ms_evo_var": "hom_C50_MP70_MS1,2ms_greedy",
+            "hom_C50_MP70_MS7ms_evo": "hom_C50_MP70_MS7ms_greedy",
+            "hom_C50_MP70_MS14ms_evo": "hom_C50_MP70_MS14ms_greedy",
+            #    "hom_C50_MP70_MS14ms_evo_var": "hom_C50_MP70_MS14ms_greedy",
+    },
+    "MP100":{
+            "hom_C50_MP100_MS1,2ms_evo": "hom_C50_MP100_MS1,2ms_greedy",
+            #    "hom_C50_MP100_MS1,2ms_evo_var": "hom_C50_MP100_MS1,2ms_greedy",
+            "hom_C50_MP100_MS7ms_evo": "hom_C50_MP100_MS7ms_greedy",
+            "hom_C50_MP100_MS14ms_evo": "hom_C50_MP100_MS14ms_greedy",
+            #    "hom_C50_MP100_MS14ms_evo_var": "hom_C50_MP100_MS14ms_greedy",
+    },
+    },
+    "hom_C100": {
+        "MP30":{
+            "hom_C100_MP30_MS1,2ms_evo": "hom_C100_MP30_MS1,2ms_greedy",
+            #    "hom_C100_MP30_MS1,2ms_evo_var": "hom_C100_MP30_MS1,2ms_greedy",
+            "hom_C100_MP30_MS7ms_evo": "hom_C100_MP30_MS7ms_greedy",
+            "hom_C100_MP30_MS14ms_evo": "hom_C100_MP30_MS14ms_greedy",
+            #    "hom_C100_MP30_MS14ms_evo_var": "hom_C100_MP30_MS14ms_greedy",
         },
-        "hom_C150": {
-            "MP30":{
-                "hom_C150_MP30_MS1,2ms_evo": "hom_C150_MP30_MS1,2ms_greedy",
-                #    "hom_C150_MP30_MS1,2ms_evo_var": "hom_C150_MP30_MS1,2ms_greedy",
-                "hom_C150_MP30_MS7ms_evo": "hom_C150_MP30_MS7ms_greedy",
-                "hom_C150_MP30_MS14ms_evo": "hom_C150_MP30_MS14ms_greedy",
-                #    "hom_C150_MP30_MS14ms_evo_var": "hom_C150_MP30_MS14ms_greedy",
-            },
-        "MP50":{
-                "hom_C150_MP70_MS1,2ms_evo": "hom_C150_MP70_MS1,2ms_greedy",
-                #    "hom_C150_MP70_MS1,2ms_evo_var": "hom_C150_MP70_MS1,2ms_greedy",
-                "hom_C150_MP70_MS7ms_evo": "hom_C150_MP70_MS7ms_greedy",
-                "hom_C150_MP70_MS14ms_evo": "hom_C150_MP70_MS14ms_greedy",
-                #    "hom_C150_MP70_MS14ms_evo_var": "hom_C150_MP70_MS14ms_greedy",
-        },
-        "MP100":{      
-                "hom_C150_MP100_MS1,2ms_evo": "hom_C150_MP100_MS1,2ms_greedy",
-                #    "hom_C150_MP100_MS1,2ms_evo_var": "hom_C150_MP100_MS1,2ms_greedy",
-                "hom_C150_MP100_MS7ms_evo": "hom_C150_MP100_MS7ms_greedy",
-                "hom_C150_MP100_MS14ms_evo": "hom_C150_MP100_MS14ms_greedy",
-                #    "hom_C150_MP100_MS14ms_evo_var": "hom_C150_MP100_MS14ms_greedy",
-        }
-        
-        },
+    "MP70":{
+            "hom_C100_MP70_MS1,2ms_evo": "hom_C100_MP70_MS1,2ms_greedy",
+            #    "hom_C100_MP70_MS1,2ms_evo_var": "hom_C150_MP70_MS1,2ms_greedy",
+            "hom_C100_MP70_MS7ms_evo": "hom_C100_MP70_MS7ms_greedy",
+            "hom_C100_MP70_MS14ms_evo": "hom_C100_MP70_MS14ms_greedy",
+            #    "hom_C100_MP70_MS14ms_evo_var": "hom_C100_MP70_MS14ms_greedy",
+    },
+    "MP100":{
+            "hom_C100_MP100_MS1,2ms_evo": "hom_C100_MP100_MS1,2ms_greedy",
+            #    "hom_C100_MP100_MS1,2ms_evo_var": "hom_C100_MP100_MS1,2ms_greedy",
+            "hom_C100_MP100_MS7ms_evo": "hom_C100_MP100_MS7ms_greedy",
+            "hom_C100_MP100_MS14ms_evo": "hom_C100_MP100_MS14ms_greedy",
+            #    "hom_C100_MP100_MS14ms_evo_var": "hom_C100_MP100_MS14ms_greedy",
     }
+    },
+    "hom_C150": {
+        "MP30":{
+            "hom_C150_MP30_MS1,2ms_evo": "hom_C150_MP30_MS1,2ms_greedy",
+            #    "hom_C150_MP30_MS1,2ms_evo_var": "hom_C150_MP30_MS1,2ms_greedy",
+            "hom_C150_MP30_MS7ms_evo": "hom_C150_MP30_MS7ms_greedy",
+            "hom_C150_MP30_MS14ms_evo": "hom_C150_MP30_MS14ms_greedy",
+            #    "hom_C150_MP30_MS14ms_evo_var": "hom_C150_MP30_MS14ms_greedy",
+        },
+    "MP50":{
+            "hom_C150_MP70_MS1,2ms_evo": "hom_C150_MP70_MS1,2ms_greedy",
+            #    "hom_C150_MP70_MS1,2ms_evo_var": "hom_C150_MP70_MS1,2ms_greedy",
+            "hom_C150_MP70_MS7ms_evo": "hom_C150_MP70_MS7ms_greedy",
+            "hom_C150_MP70_MS14ms_evo": "hom_C150_MP70_MS14ms_greedy",
+            #    "hom_C150_MP70_MS14ms_evo_var": "hom_C150_MP70_MS14ms_greedy",
+    },
+    "MP100":{      
+            "hom_C150_MP100_MS1,2ms_evo": "hom_C150_MP100_MS1,2ms_greedy",
+            #    "hom_C150_MP100_MS1,2ms_evo_var": "hom_C150_MP100_MS1,2ms_greedy",
+            "hom_C150_MP100_MS7ms_evo": "hom_C150_MP100_MS7ms_greedy",
+            "hom_C150_MP100_MS14ms_evo": "hom_C150_MP100_MS14ms_greedy",
+            #    "hom_C150_MP100_MS14ms_evo_var": "hom_C150_MP100_MS14ms_greedy",
+    }
+    
+    },
+}
 
-    ## for creating the diagrams and hv-ratio file
-    for _, network in enumerate(experiments):
+experimentsTest = {
+    "het_C50": {
+        "MP30": {
+            "het_C50_MP30_MS1,2ms_evo": "het_C50_MP30_MS1,2ms_greedy",
+            #"het_C50_MP30_MS1,2ms_evo_var": "het_C50_MP30_MS1,2ms_greedy",
+            "het_C50_MP30_MS7ms_evo": "het_C50_MP30_MS7ms_greedy",
+            "het_C50_MP30_MS14ms_evo": "het_C50_MP30_MS14ms_greedy",
+            #"het_C50_MP30_MS14ms_evo_var": "het_C50_MP30_MS14ms_greedy"
+            }
+    }
+}
+
+## for creating the diagrams and hv-ratio file
+for _, network in enumerate(experiments):
 
 
-        for _, mp_name in enumerate(experiments[network]):
-            subplots4x3 = make_subplots(
-                rows=4,
-                cols=3,
-                shared_yaxes=True,
-                subplot_titles=list(experiments[network][mp_name])
-                )
+    for _, mp_name in enumerate(experiments[network]):
+        subplots4x3 = make_subplots(
+            rows=4,
+            cols=3,
+            shared_yaxes=True,
+            subplot_titles=list(experiments[network][mp_name])
+            )
 
-            subplots4x3.update_layout(
-                template=template_subplot_diagrams,
-                showlegend=False,
+        subplots4x3.update_layout(
+            template=template_subplot_diagrams,
+            showlegend=False,
+        )
+        subplots4x3.update_annotations(font= {
+                'family': 'Courier New, monospace',
+                'size': 8,
+                'color': 'black'
+            }
             )
-            subplots4x3.update_annotations(font= {
-                    'family': 'Courier New, monospace',
-                    'size': 8,
-                    'color': 'black'
-                }
-                )
 
-            subplots4x3.update_yaxes(
-            title_text="-AVG_DL", row=1, col=1
-            )
-            subplots4x3.update_yaxes(
-            title_text="PC", row=2, col=1
-            )
-            subplots4x3.update_yaxes(
-            title_text="HV", row=3, col=1
-            )
-            subplots4x3.update_yaxes(
-            title_text="HV_ratio", row=4, col=1
-            )
-            subplots4x3.update_xaxes(
-                title_text="ticks", row=4, col=1
-            )
-            subplots4x3.update_xaxes(
-                title_text="ticks", row=4, col=2
-            )
-            subplots4x3.update_xaxes(
-                title_text="ticks", row=4, col=3
-            )
-            for config_index, config_name in enumerate(experiments[network][mp_name]):
-                create_objective_diagrams(
-                    network_name=network,
-                    baseline_name=experiments[network][mp_name][config_name],
-                    col_index=config_index+1,
-                    config_name=config_name,
-                    moving_portion=mp_name,
-                    show_diagram=False,
-                    export_diagrams=True
+        subplots4x3.update_yaxes(
+        title_text="-AVG_DL", row=1, col=1
+        )
+        subplots4x3.update_yaxes(
+        title_text="PC", row=2, col=1
+        )
+        subplots4x3.update_yaxes(
+        title_text="HV", row=3, col=1
+        )
+        subplots4x3.update_yaxes(
+        title_text="HV_ratio", row=4, col=1
+        )
+        subplots4x3.update_xaxes(
+            title_text="ticks", row=4, col=1
+        )
+        subplots4x3.update_xaxes(
+            title_text="ticks", row=4, col=2
+        )
+        subplots4x3.update_xaxes(
+            title_text="ticks", row=4, col=3
+        )
+        for config_index, config_name in enumerate(experiments[network][mp_name]):
+            create_objective_diagrams(
+                network_name=network,
+                baseline_name=experiments[network][mp_name][config_name],
+                col_index=config_index+1,
+                config_name=config_name,
+                moving_portion=mp_name,
+                show_diagram=False,
+                export_diagrams=True
 
-                )
-                create_avrg_hypervolume_ratio_dataset(
-                    network_name=network, 
-                    config_name=config_name, 
-                    col_index=config_index+1,
-                    export_diagrams=True,
-                    moving_portion=mp_name,
-                    show_diagram=False,
-                    baseline_name=experiments[network][mp_name][config_name], 
-                    write_to_ratio_file=True)
-                create_box_plots_averaged(
-                    network_name=network,
-                    config_name=config_name,
-                    baseline_name=experiments[network][mp_name][config_name],
-                    export_diagrams=True,
-                    show_diagram=False,
-                    moving_portion=mp_name,
-                )
-                remove_blank_page(f"./diagrams/{network}/{mp_name}/{config_name}")
-            
-            subplots4x3.write_image(f"./diagrams/{network}/{mp_name}/MS_compare_plot.pdf")
-            remove_blank_page(f"./diagrams/{network}/{mp_name}")
+            )
+            create_avrg_hypervolume_ratio_dataset(
+                network_name=network, 
+                config_name=config_name, 
+                col_index=config_index+1,
+                export_diagrams=True,
+                moving_portion=mp_name,
+                show_diagram=False,
+                baseline_name=experiments[network][mp_name][config_name], 
+                write_to_ratio_file=True)
+            create_box_plots_averaged(
+                network_name=network,
+                config_name=config_name,
+                baseline_name=experiments[network][mp_name][config_name],
+                export_diagrams=True,
+                show_diagram=False,
+                moving_portion=mp_name,
+            )
+            remove_blank_page(f"./diagrams/{network}/{mp_name}/{config_name}")
+        
+        subplots4x3.write_image(f"./diagrams/{network}/{mp_name}/MS_compare_plot.pdf")
+        remove_blank_page(f"./diagrams/{network}/{mp_name}")
 
+# generate_diagrams(subplots4x3=subplots4x3)
 create_result_boxplots("het", show_diagram=False, export_diagrams=True)

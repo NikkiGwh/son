@@ -467,7 +467,7 @@ def start_optimization(
         editor_message_queue: multiprocessing.Queue,
         running_mode: str,
         mutation_prob: float = 0.9,  # 0.9 is pymoo default
-        crossover_prob: float = 0.9,  # 0.9 is pymoo default
+        crossover_prob: float = 1,  # 0.9 is pymoo default
         mutation_prob_var = None,
         seed=None,
         objectivespace_history=False,
@@ -519,7 +519,8 @@ def start_optimization(
     # algorithm config
     if (algorithm == AlgorithmEnum.NSGA3.value):
         # create the reference directions to be used for the optimization in NSGA3
-        ref_dirs = get_reference_directions("uniform", len(objectives), n_partitions=12)
+        ref_dirs = get_reference_directions("uniform", len(objectives), n_partitions=20)
+        # ref_dirs = get_reference_directions("energy", len(objectives), n_points=12)
         pymooAlgorithm = NSGA3(pop_size=pop_size,
                                sampling=samplingConfig,
                                crossover=crossoverConfig,

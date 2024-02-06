@@ -43,7 +43,7 @@ default_simulation_params = {
     "decisionspace_history": False,
     "moving_selection_name": "",
     "running_mode": RunningMode.LIVE.value,
-    "crossover_prob": 0.9, # 0.9 is pymoo default
+    "crossover_prob": 1, # 0.9 is pymoo default
     "mutation_prob": 0.9, # 0.9 is pymoo default
     "mutation_prob_var": None # None is pymoo default --> converts to 1/number_of_variables
 } | default_node_params
