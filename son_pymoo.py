@@ -26,6 +26,7 @@ from pymoo.operators.crossover.pntx import SinglePointCrossover
 from pymoo.termination import get_termination
 from pymoo.core.termination import Termination
 import networkx as nx
+from scipy.spatial import distance
 
 
 class ObjectiveEnum(Enum):
@@ -55,6 +56,7 @@ class MutationEnum(Enum):
     BIT_FLIP = "BIT_FLIP"
     PM_MUTATION = "PM_MUTATION"
     SON_MUTATION= "SON_MUTATION"
+    HAMMING_DISTANCE = "HAMMING_DISTANCE"
 class SamplingEnum(Enum):
     SON_RANDOM_SAMPLING = "SON_RANDOM_SAMPLING"
     # SMALL_BS_FIRST_SAMPLING = "SMALL_BS_FIRST_SAMPLING"
@@ -273,6 +275,33 @@ class HighRssiFirstSampling(Sampling):
         X[-1] = greedy_activation_decision_space
 
         return X
+    
+class HammingDistanceSampling(Sampling):
+    def _do(self, problem: SonProblemElementWise, n_samples, **kwargs):
+        X = np.empty((n_samples, problem.n_var), int)
+
+        # create the first n_samples-1 individuums randomly
+        for i in range(n_samples):
+            for j in range(problem.n_var):
+                X[i][j] = np.random.randint(problem.xl[j], problem.xu[j]+1)
+        
+        # try to maximize the hamming distance between individuums
+                
+        for i in range(0, round((n_samples)/2), 1):
+            a = X[i]
+            b = X[i+1]
+            if float(distance.hamming(a,b)) < 0.8:
+                for j in range(problem.n_var):
+                    if problem.xu[j] > 1:
+                        while b[j] == a[j]:
+                            b[j] = np.random.randint(problem.xl[j], problem.xu[j]+1)
+
+                
+        # last individuum is created with greedy assignment (highest rssi connection for each user)
+        greedy_activation_design_space = problem.son_original.find_activation_profile_greedy_user()
+        greedy_activation_decision_space = convert_design_space_ind_to_decision_space_ind(problem.son_original, greedy_activation_design_space)
+        X[-1] = greedy_activation_decision_space
+        return X
 
 
 class SonCrossover(Crossover):
@@ -321,6 +350,29 @@ class SonMutation(Mutation):
                     while active_bs == new_active_bs and len(possible_activations_dict[possible_activations_list[variable_index]]) > 1:
                         new_active_bs = np.random.randint(0, len(possible_activations_dict[possible_activations_list[variable_index]]))
                     Xp[ind_index][variable_index] = new_active_bs
+        return Xp
+
+class HammingDistanceMutation(Mutation):
+
+    def __init__(self, prob:float, prob_var):
+        super().__init__(prob=prob, prob_var=prob_var)
+    
+   
+    def _do(self, problem: SonProblemElementWise, X, **kwargs):
+
+        Xp = np.copy(X)
+        prob_var = self.get_prob_var(problem, size=(problem.n_var, 1))
+
+        for ind_index, ind_decision_space in enumerate(Xp):
+            old_ind = np.copy(Xp[ind_index])
+
+            for j in range(problem.n_var):
+                if problem.xu[j] > 1 and prob_var[j] >= 0.5:
+                    while float(distance.hamming(old_ind, Xp[ind_index])) < 0.4:
+                        Xp[ind_index][j] = np.random.randint(problem.xl[j], problem.xu[j]+1)
+                        if float(distance.hamming(old_ind, Xp[ind_index])) > 0.4:
+                            continue
+
         return Xp
 
     def do(self, problem: SonProblemElementWise, pop, inplace=True, **kwargs):
@@ -511,8 +563,10 @@ def start_optimization(
     if (mutation == MutationEnum.PM_MUTATION.value):
         mutationConfig = PolynomialMutation(
             prob=mutation_prob, prob_var=mutation_prob_var, eta=3, vtype=int)
-    elif (mutation == MutationEnum.BIT_FLIP):
+    elif (mutation == MutationEnum.BIT_FLIP.value):
         mutationConfig = BitflipMutation(prob=mutation_prob, prob_var=mutation_prob_var)
+    elif (mutation == MutationEnum.HAMMING_DISTANCE.value):
+        mutationConfig = HammingDistanceMutation(prob=mutation_prob, prob_var=mutation_prob_var)
     else:
         mutationConfig = SonMutation(prob=mutation_prob, prob_var=mutation_prob_var)
 
