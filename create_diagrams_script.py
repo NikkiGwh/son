@@ -928,19 +928,18 @@ def create_box_plots_averaged(
         fig_iqr = go.Figure()
 
         fig_variance.update_layout(
-            title= "standard deviation",
+            title= "standard deviation for DL",
             xaxis_title="time in ticks",
-            yaxis_title="averaged standard deviation",
+            yaxis_title="DL",
             template=template_one_diagram
             )
         fig_iqr.update_layout(
             title= "IQR",
             xaxis_title="time in ticks",
-            yaxis_title="averaged IQR",
+            yaxis_title="IQR",
             template=template_one_diagram
             )
         
-
         fig_variance.add_trace(
             go.Scatter(
                 x=time_and_frames_list[:, 1],
@@ -1094,7 +1093,8 @@ def create_pareto_history_plots(
         x=np.array(pareto_front)[:,0],
         y=np.array(pareto_front)[:,1],
         mode='markers',
-        name="{config_name} pareto".format(config_name=config_name)
+        name="{config_name} pareto".format(config_name=config_name),
+        line={"color": evo_color}
         )
     )
 
@@ -1128,8 +1128,7 @@ def create_pareto_history_plots(
                 y=[objective_1_list_g[tick]],
                 mode='markers',
                 name= "{greedy_mirror} value".format(greedy_mirror=greedy_mirror),
-                opacity= 0.5,
-                marker=dict(size=10)
+                line={"color": greedy_color}
                 )
         )
     
@@ -1148,7 +1147,8 @@ def create_pareto_history_plots(
         x=pareto_front_objecitve_2_normalized,
         y=pareto_front_objecitve_1_normalized,
         mode='markers',
-        name="{config_name} pareto".format(config_name=config_name)
+        name="{config_name} pareto".format(config_name=config_name),
+        line={"color": evo_color}
         )
     )
 
@@ -1182,26 +1182,26 @@ def create_pareto_history_plots(
                 y=[objective_1_value_g_normalized],
                 mode='markers',
                 name= "{greedy_mirror} value".format(greedy_mirror=greedy_mirror),
-                opacity= 0.5,
-                marker=dict(size=10)
+                line={"color": greedy_color}
                 )
         )
-    fig0.add_trace(
-        go.Scatter(
-                x=[1.1],
-                y=[1.1],
-                mode='markers',
-                name= "reference point",
-                line={"color": greedy_color},
-                )
-        )
+    # fig0.add_trace(
+    #     go.Scatter(
+    #             x=[1.1],
+    #             y=[1.1],
+    #             mode='markers',
+    #             name= "reference point",
+    #             line={"color": greedy_color},
+    #             )
+    #     )
     if export_diagrams:
-        diagram_path= "diagrams/" + network_name + "/" + moving_portion + "/" + config_name + "/"
+        diagram_path= "./diagrams/"
         if not os.path.exists(diagram_path):
             os.makedirs(diagram_path)
             
-            fig1.write_image("diagrams/pareto_front.pdf")
-            fig0.write_image("diagrams/pareto_front_normalized.pdf")
+        fig1.write_image("diagrams/pareto_front_pertick.pdf")
+        fig0.write_image("diagrams/pareto_front_pertick_normalized.pdf")
+        remove_blank_page(diagram_path)
     
     if show_diagram:
         fig1.show()
@@ -1427,7 +1427,7 @@ experiments = {
             "hom_C150_MP30_MS14ms_evo": "hom_C150_MP30_MS14ms_greedy",
             #    "hom_C150_MP30_MS14ms_evo_var": "hom_C150_MP30_MS14ms_greedy",
         },
-    "MP50":{
+    "MP70":{
             "hom_C150_MP70_MS1,2ms_evo": "hom_C150_MP70_MS1,2ms_greedy",
             #    "hom_C150_MP70_MS1,2ms_evo_var": "hom_C150_MP70_MS1,2ms_greedy",
             "hom_C150_MP70_MS7ms_evo": "hom_C150_MP70_MS7ms_greedy",
@@ -1459,7 +1459,6 @@ experimentsTest = {
 
 ## for creating the diagrams and hv-ratio file
 for _, network in enumerate(experiments):
-
 
     for _, mp_name in enumerate(experiments[network]):
         subplots4x3 = make_subplots(
@@ -1534,5 +1533,7 @@ for _, network in enumerate(experiments):
         subplots4x3.write_image(f"./diagrams/{network}/{mp_name}/MS_compare_plot.pdf")
         remove_blank_page(f"./diagrams/{network}/{mp_name}")
 
-# generate_diagrams(subplots4x3=subplots4x3)
+
 create_result_boxplots("het", show_diagram=False, export_diagrams=True)
+        
+create_pareto_history_plots(export_diagrams=True, show_diagram=False)
