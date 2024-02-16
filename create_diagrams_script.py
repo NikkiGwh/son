@@ -1199,8 +1199,8 @@ def create_pareto_history_plots(
         if not os.path.exists(diagram_path):
             os.makedirs(diagram_path)
             
-        fig1.write_image("diagrams/pareto_front_pertick.pdf")
-        fig0.write_image("diagrams/pareto_front_pertick_normalized.pdf")
+        fig1.write_image(f"diagrams/pf_tick{tick}_{config_name}.pdf")
+        fig0.write_image(f"diagrams/pf_tick{tick}_{config_name}_normalized.pdf")
         remove_blank_page(diagram_path)
     
     if show_diagram:
