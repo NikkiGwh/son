@@ -1,4 +1,6 @@
 
+import re
+from turtle import title
 import plotly.graph_objects as go
 from pymoo.indicators.hv import Hypervolume
 from pymoo.decomposition.asf import ASF
@@ -36,7 +38,7 @@ subplots4x3.update_layout(
 )
 subplots4x3.update_annotations(font= {
         'family': 'Courier New, monospace',
-        'size': 8,
+        'size': 12,
         'color': 'black'
     }
     )
@@ -1209,6 +1211,11 @@ def create_pareto_history_plots(
 
 ##### create final boxplots
 def create_result_boxplots(prefix: str, show_diagram: bool, export_diagrams: bool):
+    title_text = ""
+    if prefix == "het":
+        title_text = "Heterogeneous Topology"
+    elif prefix == "hom":
+        title_text = "Homogeneous Topology"
     fig = make_subplots(
         rows=3,
         cols=3,
@@ -1218,16 +1225,17 @@ def create_result_boxplots(prefix: str, show_diagram: bool, export_diagrams: boo
     fig.update_layout(
             template=template_subplot_diagrams,
             showlegend=False,
+            title_text= title_text
         )
     
     fig.update_annotations(font= {
                 'family': 'Courier New, monospace',
-                'size': 8,
+                'size': 12,
                 'color': 'black'
             }
             )
-    x_axis_list = ["30% moving UE's", "70% moving UE's", "100% moving UE's"]
-    y_axis_list = ["150%", "100%", "50%"]
+    x_axis_list = ["30% MP", "70% MP", "100% MP"]
+    y_axis_list = ["150% Capacity", "100% Capacity", "50% Capacity"]
     title_list = []
     
     with open("./diagrams/avg_hypervolume_ratios.json", "r") as jsonFile:
@@ -1461,20 +1469,33 @@ experimentsTest = {
 for _, network in enumerate(experiments):
 
     for _, mp_name in enumerate(experiments[network]):
+
+        subtitle_list= []
+        for item in list(experiments[network][mp_name]):
+            match = re.search(r'MS(\d+)', item)
+            if match:
+                speed = match.group(1)  # Extract the speed value
+                # Format the speed value as desired
+                formatted_speed = f"{speed} m/s"
+                subtitle_list.append(formatted_speed)
+
         subplots4x3 = make_subplots(
             rows=4,
             cols=3,
             shared_yaxes=True,
-            subplot_titles=list(experiments[network][mp_name])
+            # subplot_titles=subtitle_list,
+            column_titles=subtitle_list
             )
 
+        title_text = re.search(r'MP(\d+)', mp_name).group(1) + "% Moving Portion"
         subplots4x3.update_layout(
             template=template_subplot_diagrams,
-            showlegend=False,
+            title_text=title_text,
+            showlegend=False
         )
         subplots4x3.update_annotations(font= {
                 'family': 'Courier New, monospace',
-                'size': 8,
+                'size': 12,
                 'color': 'black'
             }
             )
@@ -1534,6 +1555,7 @@ for _, network in enumerate(experiments):
         remove_blank_page(f"./diagrams/{network}/{mp_name}")
 
 
-create_result_boxplots("het", show_diagram=False, export_diagrams=True)
+create_result_boxplots("het", export_diagrams=True,  show_diagram=False)
+create_result_boxplots("hom", export_diagrams=True,  show_diagram=False)
         
 create_pareto_history_plots(export_diagrams=True, show_diagram=False)

@@ -65,7 +65,12 @@ def load_templates(dpi=None, base_width_in_px = None):
 
     standard_font_format = {
         'family': 'Courier New, monospace',
-        'size': 8,
+        'size': 12,
+        'color': 'black'
+    }
+    tick_font_format = {
+        'family': 'Courier New, monospace',
+        'size': 10,
         'color': 'black'
     }
 
@@ -80,7 +85,7 @@ def load_templates(dpi=None, base_width_in_px = None):
         "linewidth": 2,
         "gridcolor": "lightgray",
         "gridwidth": 1,
-        "tickfont": standard_font_format,
+        "tickfont": tick_font_format,
         "titlefont": standard_font_format,
     }
 
@@ -96,7 +101,7 @@ def load_templates(dpi=None, base_width_in_px = None):
     standard_title_format = {
         "font": {
             'family': 'Courier New, monospace',
-            'size': 10,
+            'size': 14,
             'color': 'black'
             }
     }
@@ -106,8 +111,8 @@ def load_templates(dpi=None, base_width_in_px = None):
         "yaxis": standard_axis_format,
         "paper_bgcolor": "white",
         'plot_bgcolor': '#FFFFFF',
-        'margin': {'l': 50, 'r': 50, 't': 20, 'b': 40},
-        'showlegend': True,
+        'margin': {'l': 50, 'r': 50, 't': 40, 'b': 40},
+        'showlegend': False,
         'legend': standard_legend_format,
         'title': standard_title_format
     }
