@@ -1,6 +1,5 @@
 
 import re
-from turtle import title
 import plotly.graph_objects as go
 from pymoo.indicators.hv import Hypervolume
 from pymoo.decomposition.asf import ASF
@@ -53,7 +52,7 @@ subplots4x3.update_yaxes(
 title_text="HV", row=3, col=1
 )
 subplots4x3.update_yaxes(
-title_text="HV_ratio", row=4, col=1
+title_text="HVRATIO", row=4, col=1
 )
 subplots4x3.update_xaxes(
     title_text="ticks", row=3, col=1
@@ -731,7 +730,7 @@ def create_avrg_hypervolume_ratio_dataset(
     fig7.update_layout(
         title=config_name,
         xaxis_title="time in ticks",
-        yaxis_title="HV ratio",
+        yaxis_title="HVRATIO",
         bargap=0,
         template=template_one_diagram
         )
@@ -1213,9 +1212,9 @@ def create_pareto_history_plots(
 def create_result_boxplots(prefix: str, show_diagram: bool, export_diagrams: bool):
     title_text = ""
     if prefix == "het":
-        title_text = "Heterogeneous Topology"
+        title_text = "HVRATIO_AVG for heterogeneous topology"
     elif prefix == "hom":
-        title_text = "Homogeneous Topology"
+        title_text = "HVRATIO_AVG for homogeneous topology"
     fig = make_subplots(
         rows=3,
         cols=3,
@@ -1235,7 +1234,7 @@ def create_result_boxplots(prefix: str, show_diagram: bool, export_diagrams: boo
             }
             )
     x_axis_list = ["30% MP", "70% MP", "100% MP"]
-    y_axis_list = ["150% Capacity", "100% Capacity", "50% Capacity"]
+    y_axis_list = ["150% WL", "100% WL", "50% WL"]
     title_list = []
     
     with open("./diagrams/avg_hypervolume_ratios.json", "r") as jsonFile:
@@ -1257,7 +1256,7 @@ def create_result_boxplots(prefix: str, show_diagram: bool, export_diagrams: boo
                     row_index = 1
 
                 if "1,2ms" in config_name:
-                    velocity= "1.2 m/s"
+                    velocity= "1,2 m/s"
                 elif "7ms" in config_name:
                     velocity= "7 m/s"
                 elif "14ms" in config_name:
@@ -1472,12 +1471,14 @@ for _, network in enumerate(experiments):
 
         subtitle_list= []
         for item in list(experiments[network][mp_name]):
-            match = re.search(r'MS(\d+)', item)
+            match = re.search(r"(?<=MS)\d+(?:,\d+)?", item)
             if match:
-                speed = match.group(1)  # Extract the speed value
+
+                speed = match.group(0)  # Extract the speed value
                 # Format the speed value as desired
                 formatted_speed = f"{speed} m/s"
                 subtitle_list.append(formatted_speed)
+
 
         subplots4x3 = make_subplots(
             rows=4,
@@ -1510,7 +1511,7 @@ for _, network in enumerate(experiments):
         title_text="HV", row=3, col=1
         )
         subplots4x3.update_yaxes(
-        title_text="HV_ratio", row=4, col=1
+        title_text="HVRATIO", row=4, col=1
         )
         subplots4x3.update_xaxes(
             title_text="ticks", row=4, col=1
