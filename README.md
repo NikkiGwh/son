@@ -2,8 +2,6 @@
 
 A mobile Network simulation
 
-- [Documentation](https://www.youtube.com/watch?v=VQyViaC_QOg&ab_channel=OzzyManReviews)
-
 ![topologyimage](topologyimage.png)
 
 ## Requirements
@@ -12,7 +10,7 @@ A mobile Network simulation
 
 ## How to install
 
-### Run this command in a command prompt when using normal python environment:
+### Run this command in a command prompt when using a normal python environment:
 
 ```
 pip install -r pip-requirements.txt
@@ -43,7 +41,7 @@ python network_simulation_script.py test ./evo_only_config.json
 
 make sure that a network with the corresponding name already exists before execution. Otherwise it won't work.
 
-You will find the results inside a new folder with the name of the config-json-file-path parameter. This folder will appear in directory of the corresponding networkname of the run.
+You will find the results inside a new folder with the name of the config-json-file-path parameter. This folder will appear in the directory of the corresponding network name of the run.
 
 for the example above this would mean the results will appear in the folder datastore/test/evo_only_config/... after runtime.
 
@@ -62,7 +60,7 @@ apptainer build nns.sif nns.def
 sbatch slurm_job.sh
 ```
 
-To change how the programm is run, change either the `.def` file, or use
+To change how the program is run, change either the `.def` file, or use
 
 ```
 apptainer exec nns.sif COMMAND
