@@ -253,8 +253,8 @@ class Son:
             type="cell", noise=self.network_node_params["cell"]["noise"],
             shadow_component=self.network_node_params["cell"]["shadow_component"])
         self.initialize_edges()
-        if update_network:
-            self.update_network_attributes()
+
+        self.update_network_attributes()
 
     def remove_node(self, node_id: str, update_network=True):
         self.graph.remove_node(node_id)
