@@ -1,6 +1,5 @@
-from logging import config
-from re import T
-from matplotlib.pyplot import box
+
+import re
 import plotly.graph_objects as go
 from pymoo.indicators.hv import Hypervolume
 from pymoo.decomposition.asf import ASF
@@ -16,6 +15,9 @@ template_one_diagram = "oscilloscope+TH--1-3-TH"
 template_subplot_diagrams = "oscilloscope+TH--3-4-TH"
 template_one_diagram_paretofront= template_one_diagram
 opacity_runs = 0.2
+greedy_color= "black"
+evo_color= "blue"
+runs_color = "#2cbcc4"
 datastore_directory_name = "datastore_thesis_4"
 
 loaded_dpi = load_templates(
@@ -35,7 +37,7 @@ subplots4x3.update_layout(
 )
 subplots4x3.update_annotations(font= {
         'family': 'Courier New, monospace',
-        'size': 8,
+        'size': 12,
         'color': 'black'
     }
     )
@@ -50,7 +52,7 @@ subplots4x3.update_yaxes(
 title_text="HV", row=3, col=1
 )
 subplots4x3.update_yaxes(
-title_text="HV_ratio", row=4, col=1
+title_text="HVRATIO", row=4, col=1
 )
 subplots4x3.update_xaxes(
     title_text="ticks", row=3, col=1
@@ -296,7 +298,7 @@ def create_objective_diagrams(
                 name="run_i",
                 showlegend= True if index == 0 else False,
                 mode='lines',
-                line={"color": "blue", "width": lineWidth},
+                line={"color": runs_color,"width": lineWidth},
                 opacity=opacity_runs,
             ))
         fig3.add_trace(
@@ -306,7 +308,7 @@ def create_objective_diagrams(
                 name="run_i",
                 showlegend=True if index == 0 else False,
                 mode='lines',
-                line={"color": "blue", "width": lineWidth},
+                line={"color": runs_color, "width": lineWidth},
                 opacity=opacity_runs,
             ))
         
@@ -316,7 +318,7 @@ def create_objective_diagrams(
             y=objective_1_avrg_list,
             name="evo",
             mode='lines',
-            line={"color": "red", "width": lineWidth},
+            line={"color": evo_color, "width": lineWidth},
         ))
     fig2.add_trace(
         go.Scatter(
@@ -324,7 +326,7 @@ def create_objective_diagrams(
             y=base_line_objective_1_avrg_list,
             name="greedy",
             mode='lines',
-            line={ "color": "black", "width": lineWidth},
+            line={ "color": greedy_color, "width": lineWidth},
         ))
     fig3.add_trace(
             go.Scatter(
@@ -332,7 +334,7 @@ def create_objective_diagrams(
                 y=objective_2_avrg_list,
                 name="evo",
                 mode='lines',
-                line={ "color": "red", "width": lineWidth},
+                line={ "color": evo_color, "width": lineWidth},
             ))
     fig3.add_trace(
         go.Scatter(
@@ -340,7 +342,7 @@ def create_objective_diagrams(
             y=base_line_objective_2_avrg_list,
             name="greedy",
             mode='lines',
-            line={ "color": "black", "width": lineWidth},
+            line={ "color": greedy_color, "width": lineWidth},
         ))
     ## normalized objectives plot
     fig4 = go.Figure()
@@ -366,7 +368,7 @@ def create_objective_diagrams(
                 name="run_i",
                 showlegend=True if index == 0 else False,
                 mode='lines',
-                line={"color": "blue", "width": lineWidth},
+                line={"color": runs_color, "width": lineWidth},
                 opacity=opacity_runs,
             ))
         ###TODO delete###
@@ -377,7 +379,7 @@ def create_objective_diagrams(
                 name="run_i",
                 showlegend=False,
                 mode='lines',
-                line={"color": "blue", "width": lineWidth},
+                line={"color": runs_color, "width": lineWidth},
                 opacity=opacity_runs,
             ), row=1, col=col_index)
         
@@ -388,7 +390,7 @@ def create_objective_diagrams(
                 name="run_i",
                 showlegend=True if index == 0 else False,
                 mode='lines',
-                line={"color": "blue", "width": lineWidth},
+                line={"color": runs_color, "width": lineWidth},
                 opacity=opacity_runs,
             ))
         
@@ -399,7 +401,7 @@ def create_objective_diagrams(
                 name="run_i",
                 showlegend=False,
                 mode='lines',
-                line={"color": "blue", "width": lineWidth},
+                line={"color": runs_color, "width": lineWidth},
                 opacity=opacity_runs,
             ), row=2, col=col_index)
         
@@ -409,7 +411,7 @@ def create_objective_diagrams(
             y=objective_1_normalized_avrg_list,
             name="evo",
             mode='lines',
-            line={"color": "red", "width": lineWidth},
+            line={"color": evo_color, "width": lineWidth},
         ))
     ###TODO delete
     subplots4x3.add_trace(
@@ -418,7 +420,7 @@ def create_objective_diagrams(
             y=objective_1_normalized_avrg_list,
             name="evo",
             mode='lines',
-            line={"color": "red", "width": lineWidth},
+            line={"color": evo_color, "width": lineWidth},
         ), row=1, col=col_index
     )
     fig4.add_trace(
@@ -427,7 +429,7 @@ def create_objective_diagrams(
             y=base_line_objective_1_normalized_avrg_list,
             name="greedy",
             mode='lines',
-            line={"color": "black", "width": lineWidth},
+            line={"color": greedy_color, "width": lineWidth},
         ))
     ##TODO delete###
     subplots4x3.add_trace(
@@ -436,7 +438,7 @@ def create_objective_diagrams(
             y=base_line_objective_1_normalized_avrg_list,
             name="greedy",
             mode='lines',
-            line={"color": "black", "width": lineWidth},
+            line={"color": greedy_color, "width": lineWidth},
         ),
         row=1, col=col_index
     )
@@ -446,7 +448,7 @@ def create_objective_diagrams(
             y=objective_2_normalized_avrg_list,
             name="evo" ,
             mode='lines',
-            line={"color": "red", "width": lineWidth}
+            line={"color": evo_color, "width": lineWidth}
         ))
     ## TODO delete
     subplots4x3.add_trace(
@@ -455,7 +457,7 @@ def create_objective_diagrams(
             y=objective_2_normalized_avrg_list,
             name="evo" ,
             mode='lines',
-            line={"color": "red", "width": lineWidth}
+            line={"color": evo_color, "width": lineWidth}
         ), row=2, col=col_index
     )
     fig5.add_trace(
@@ -464,7 +466,7 @@ def create_objective_diagrams(
             y=base_line_objective_2_normalized_avrg_list,
             name="greedy",
             mode='lines',
-            line={"color": "black", "width": lineWidth}
+            line={"color": greedy_color, "width": lineWidth}
         ))
     ##TODO delete
     subplots4x3.add_trace(
@@ -473,7 +475,7 @@ def create_objective_diagrams(
             y=base_line_objective_2_normalized_avrg_list,
             name="greedy",
             mode='lines',
-            line={"color": "black", "width": lineWidth}
+            line={"color": greedy_color, "width": lineWidth}
         ), row=2, col=col_index
     )
         
@@ -624,7 +626,7 @@ def create_avrg_hypervolume_ratio_dataset(
                 mode='lines',
                 name= f"run_i",
                 showlegend=True if index == 0 else False,
-                line={"color": "blue", "width": lineWidth},
+                line={"color": runs_color, "width": lineWidth},
                 opacity=opacity_runs,
             ))
     fig1.add_trace(
@@ -632,7 +634,7 @@ def create_avrg_hypervolume_ratio_dataset(
             x=np.array(range(hv_matrix.shape[1])),
             y = hv_baseline,
             mode='lines',
-            line={"color": "black", "width": lineWidth},
+            line={"color": greedy_color, "width": lineWidth},
             name="greedy"
         )
     )
@@ -640,7 +642,7 @@ def create_avrg_hypervolume_ratio_dataset(
         go.Scatter(
             x=np.array(range(hv_matrix.shape[1])),
             y = np.average(hv_matrix, axis=0),
-            line={"color": "red", "width": lineWidth},
+            line={"color": evo_color, "width": lineWidth},
             mode='lines',
             name="evo"
         )
@@ -687,7 +689,7 @@ def create_avrg_hypervolume_ratio_dataset(
         x=np.array(range(hv_matrix.shape[1])),
         y=hv_baseline,
         mode='lines',
-        line={"color": "black", "width": lineWidth},
+        line={"color": greedy_color, "width": lineWidth},
         opacity=1,
         name="greedy",
     ))
@@ -697,7 +699,7 @@ def create_avrg_hypervolume_ratio_dataset(
         x=np.array(range(hv_matrix.shape[1])),
         y=hv_baseline,
         mode='lines',
-        line={"color": "black", "width": lineWidth},
+        line={"color": greedy_color, "width": lineWidth},
         opacity=1,
         name="greedy",
     ), row=3, col=col_index
@@ -708,7 +710,7 @@ def create_avrg_hypervolume_ratio_dataset(
             x=np.array(range(hv_matrix.shape[1])),
             y=np.average(hv_matrix, axis=0),
             mode='lines',
-            line={"color": "blue", "width": lineWidth},
+            line={"color": evo_color, "width": lineWidth},
             opacity=1,
             name= "evo",
         ))
@@ -718,7 +720,7 @@ def create_avrg_hypervolume_ratio_dataset(
             x=np.array(range(hv_matrix.shape[1])),
             y=np.average(hv_matrix, axis=0),
             mode='lines',
-            line={"color": "blue", "width": lineWidth},
+            line={"color": evo_color, "width": lineWidth},
             opacity=1,
             name= "evo",
         ), row=3, col=col_index
@@ -728,7 +730,7 @@ def create_avrg_hypervolume_ratio_dataset(
     fig7.update_layout(
         title=config_name,
         xaxis_title="time in ticks",
-        yaxis_title="HV ratio",
+        yaxis_title="HVRATIO",
         bargap=0,
         template=template_one_diagram
         )
@@ -927,33 +929,32 @@ def create_box_plots_averaged(
         fig_iqr = go.Figure()
 
         fig_variance.update_layout(
-            title= "standard deviation",
+            title= "standard deviation for DL",
             xaxis_title="time in ticks",
-            yaxis_title="averaged standard deviation",
+            yaxis_title="DL",
             template=template_one_diagram
             )
         fig_iqr.update_layout(
             title= "IQR",
             xaxis_title="time in ticks",
-            yaxis_title="averaged IQR",
+            yaxis_title="IQR",
             template=template_one_diagram
             )
         
-
         fig_variance.add_trace(
             go.Scatter(
                 x=time_and_frames_list[:, 1],
                 y=np.sqrt(variance_list[index]),
                 name="evo",
                 mode='lines',
-                line={"color":"red", "width": lineWidth},
+                line={"color":evo_color, "width": lineWidth},
             ))
         fig_variance.add_trace(
             go.Scatter(
                 x=time_and_frames_list[:, 1],
                 y=np.sqrt(base_line_variance_list[index]),
                 name="greedy",
-                line={"color":"black", "width": lineWidth},
+                line={"color":greedy_color, "width": lineWidth},
                 mode='lines',
             ))
         fig_iqr.add_trace(
@@ -961,7 +962,7 @@ def create_box_plots_averaged(
                 x=time_and_frames_list[:, 1],
                 y=iqr_list[index],
                 name="evo",
-                line={"color":"red", "width": lineWidth},
+                line={"color":evo_color, "width": lineWidth},
                 mode='lines',
             ))
         fig_iqr.add_trace(
@@ -970,7 +971,7 @@ def create_box_plots_averaged(
                 y=base_line_iqr_list[index],
                 name="greedy",
                 mode='lines',
-                line={"color":"black", "width": lineWidth}
+                line={"color":greedy_color, "width": lineWidth}
             ))
         if show_diagram:
             fig_variance.show()
@@ -1093,7 +1094,8 @@ def create_pareto_history_plots(
         x=np.array(pareto_front)[:,0],
         y=np.array(pareto_front)[:,1],
         mode='markers',
-        name="{config_name} pareto".format(config_name=config_name)
+        name="{config_name} pareto".format(config_name=config_name),
+        line={"color": evo_color}
         )
     )
 
@@ -1127,8 +1129,7 @@ def create_pareto_history_plots(
                 y=[objective_1_list_g[tick]],
                 mode='markers',
                 name= "{greedy_mirror} value".format(greedy_mirror=greedy_mirror),
-                opacity= 0.5,
-                marker=dict(size=10)
+                line={"color": greedy_color}
                 )
         )
     
@@ -1147,7 +1148,8 @@ def create_pareto_history_plots(
         x=pareto_front_objecitve_2_normalized,
         y=pareto_front_objecitve_1_normalized,
         mode='markers',
-        name="{config_name} pareto".format(config_name=config_name)
+        name="{config_name} pareto".format(config_name=config_name),
+        line={"color": evo_color}
         )
     )
 
@@ -1181,30 +1183,117 @@ def create_pareto_history_plots(
                 y=[objective_1_value_g_normalized],
                 mode='markers',
                 name= "{greedy_mirror} value".format(greedy_mirror=greedy_mirror),
-                opacity= 0.5,
-                marker=dict(size=10)
+                line={"color": greedy_color}
                 )
         )
-    fig0.add_trace(
-        go.Scatter(
-                x=[1.1],
-                y=[1.1],
-                mode='markers',
-                name= "reference point",
-                line={"color": "black"},
-                )
-        )
+    # fig0.add_trace(
+    #     go.Scatter(
+    #             x=[1.1],
+    #             y=[1.1],
+    #             mode='markers',
+    #             name= "reference point",
+    #             line={"color": greedy_color},
+    #             )
+    #     )
     if export_diagrams:
-        diagram_path= "diagrams/" + network_name + "/" + moving_portion + "/" + config_name + "/"
+        diagram_path= "./diagrams/"
         if not os.path.exists(diagram_path):
             os.makedirs(diagram_path)
             
-            fig1.write_image("pareto_front.pdf")
-            fig0.write_image("pareto_front_normalized.pdf")
+        fig1.write_image(f"diagrams/pf_tick{tick}_{config_name}.pdf")
+        fig0.write_image(f"diagrams/pf_tick{tick}_{config_name}_normalized.pdf")
+        remove_blank_page(diagram_path)
     
     if show_diagram:
         fig1.show()
         fig0.show()
+
+##### create final boxplots
+def create_result_boxplots(prefix: str, show_diagram: bool, export_diagrams: bool):
+    title_text = ""
+    if prefix == "het":
+        title_text = "HVRATIO_AVG for heterogeneous topology"
+    elif prefix == "hom":
+        title_text = "HVRATIO_AVG for homogeneous topology"
+    fig = make_subplots(
+        rows=3,
+        cols=3,
+        shared_yaxes=True,
+        #subplot_titles=list(experiments[network][mp_name])
+    )
+    fig.update_layout(
+            template=template_subplot_diagrams,
+            showlegend=False,
+            title_text= title_text
+        )
+    
+    fig.update_annotations(font= {
+                'family': 'Courier New, monospace',
+                'size': 12,
+                'color': 'black'
+            }
+            )
+    x_axis_list = ["30% MP", "70% MP", "100% MP"]
+    y_axis_list = ["150% WL", "100% WL", "50% WL"]
+    title_list = []
+    
+    with open("./diagrams/avg_hypervolume_ratios.json", "r") as jsonFile:
+        json_object = json.load(jsonFile)
+
+        for _, network in enumerate(json_object):
+            col_index = 1
+            row_index = 1
+            velocity = ""
+            for _, config_name in enumerate(json_object[network]):
+                if "var" in config_name or prefix not in config_name:
+                    continue
+                
+                if f"{prefix}_C50" in config_name:
+                    row_index = 3
+                elif f"{prefix}_C100" in config_name:
+                    row_index = 2
+                elif f"{prefix}_C150" in config_name:
+                    row_index = 1
+
+                if "1,2ms" in config_name:
+                    velocity= "1,2 m/s"
+                elif "7ms" in config_name:
+                    velocity= "7 m/s"
+                elif "14ms" in config_name:
+                    velocity= "14 m/s"
+                
+                if "MP30" in config_name:
+                    col_index = 1
+                elif "MP70" in config_name:
+                    col_index = 2       
+                elif "MP100" in config_name:
+                    col_index = 3
+
+
+                fig.add_trace(
+                    go.Box(
+                        y=json_object[network][config_name],
+                        boxpoints='outliers',
+                        marker_color=evo_color,
+                        line_color=evo_color,
+                        name=velocity,
+                        line={"width": lineWidth}
+                    ),
+                    row=row_index,
+                    col=col_index)
+                
+        for index, _ in enumerate(x_axis_list):
+            fig.update_xaxes(row=3, col=index+1, title_text=x_axis_list[index])
+            fig.update_yaxes(row=index+1, col=1, title_text=y_axis_list[index])
+            fig.add_hline(row="all", col="all", line_width=lineWidth, y=1)
+        
+        if export_diagrams:
+            fig.write_image(f"./diagrams/{prefix}_results.pdf")
+        if show_diagram:
+            fig.show()
+        remove_blank_page(f"./diagrams")
+
+    
 
 def remove_blank_page(directory_path:str):
 
@@ -1236,14 +1325,14 @@ experiments = {
             "het_C50_MP70_MS14ms_evo": "het_C50_MP70_MS14ms_greedy",
             #"het_C50_MP70_MS14ms_evo_var": "het_C50_MP70_MS14ms_greedy",
         },
-       
-       "MP100":{
-           "het_C50_MP100_MS1,2ms_evo": "het_C50_MP100_MS1,2ms_greedy",
+    
+    "MP100":{
+        "het_C50_MP100_MS1,2ms_evo": "het_C50_MP100_MS1,2ms_greedy",
             #"het_C50_MP100_MS1,2ms_evo_var": "het_C50_MP100_MS1,2ms_greedy",
             "het_C50_MP100_MS7ms_evo": "het_C50_MP100_MS7ms_greedy",
             "het_C50_MP100_MS14ms_evo": "het_C50_MP100_MS14ms_greedy",
             #"het_C50_MP100_MS14ms_evo_var": "het_C50_MP100_MS14ms_greedy",
-       },
+    },
     },
     "het_C100": {
         "MP30":{
@@ -1276,20 +1365,20 @@ experiments = {
             "het_C150_MP30_MS14ms_evo": "het_C150_MP30_MS14ms_greedy",
             #    "het_C150_MP30_MS14ms_evo_var": "het_C150_MP30_MS14ms_greedy",
         },
-       "MP70":{ 
+    "MP70":{ 
             "het_C150_MP70_MS1,2ms_evo": "het_C150_MP70_MS1,2ms_greedy",
             #    "het_C150_MP70_MS1,2ms_evo_var": "het_C150_MP70_MS1,2ms_greedy",
             "het_C150_MP70_MS7ms_evo": "het_C150_MP70_MS7ms_greedy",
             "het_C150_MP70_MS14ms_evo": "het_C150_MP70_MS14ms_greedy",
             #    "het_C150_MP70_MS14ms_evo_var": "het_C150_MP70_MS14ms_greedy",
-       },
-       "MP100":{
+    },
+    "MP100":{
             "het_C150_MP100_MS1,2ms_evo": "het_C150_MP100_MS1,2ms_greedy",
             #    "het_C150_MP100_MS1,2ms_evo_var": "het_C150_MP100_MS1,2ms_greedy",
             "het_C150_MP100_MS7ms_evo": "het_C150_MP100_MS7ms_greedy",
             "het_C150_MP100_MS14ms_evo": "het_C150_MP100_MS14ms_greedy",
             #    "het_C150_MP100_MS14ms_evo_var": "het_C150_MP100_MS14ms_greedy",
-       },
+    },
     },
     "hom_C50": {
         "MP30":{
@@ -1299,20 +1388,20 @@ experiments = {
             "hom_C50_MP30_MS14ms_evo": "hom_C50_MP30_MS14ms_greedy",
             #    "hom_C50_MP30_MS14ms_evo_var": "hom_C50_MP30_MS14ms_greedy",
         },
-       "MP70":{
+    "MP70":{
             "hom_C50_MP70_MS1,2ms_evo": "hom_C50_MP70_MS1,2ms_greedy",
             #    "hom_C50_MP70_MS1,2ms_evo_var": "hom_C50_MP70_MS1,2ms_greedy",
             "hom_C50_MP70_MS7ms_evo": "hom_C50_MP70_MS7ms_greedy",
             "hom_C50_MP70_MS14ms_evo": "hom_C50_MP70_MS14ms_greedy",
             #    "hom_C50_MP70_MS14ms_evo_var": "hom_C50_MP70_MS14ms_greedy",
-       },
-       "MP100":{
+    },
+    "MP100":{
             "hom_C50_MP100_MS1,2ms_evo": "hom_C50_MP100_MS1,2ms_greedy",
             #    "hom_C50_MP100_MS1,2ms_evo_var": "hom_C50_MP100_MS1,2ms_greedy",
             "hom_C50_MP100_MS7ms_evo": "hom_C50_MP100_MS7ms_greedy",
             "hom_C50_MP100_MS14ms_evo": "hom_C50_MP100_MS14ms_greedy",
             #    "hom_C50_MP100_MS14ms_evo_var": "hom_C50_MP100_MS14ms_greedy",
-       },
+    },
     },
     "hom_C100": {
         "MP30":{
@@ -1322,20 +1411,20 @@ experiments = {
             "hom_C100_MP30_MS14ms_evo": "hom_C100_MP30_MS14ms_greedy",
             #    "hom_C100_MP30_MS14ms_evo_var": "hom_C100_MP30_MS14ms_greedy",
         },
-       "MP70":{
+    "MP70":{
             "hom_C100_MP70_MS1,2ms_evo": "hom_C100_MP70_MS1,2ms_greedy",
             #    "hom_C100_MP70_MS1,2ms_evo_var": "hom_C150_MP70_MS1,2ms_greedy",
             "hom_C100_MP70_MS7ms_evo": "hom_C100_MP70_MS7ms_greedy",
             "hom_C100_MP70_MS14ms_evo": "hom_C100_MP70_MS14ms_greedy",
             #    "hom_C100_MP70_MS14ms_evo_var": "hom_C100_MP70_MS14ms_greedy",
-       },
-       "MP100":{
+    },
+    "MP100":{
             "hom_C100_MP100_MS1,2ms_evo": "hom_C100_MP100_MS1,2ms_greedy",
             #    "hom_C100_MP100_MS1,2ms_evo_var": "hom_C100_MP100_MS1,2ms_greedy",
             "hom_C100_MP100_MS7ms_evo": "hom_C100_MP100_MS7ms_greedy",
             "hom_C100_MP100_MS14ms_evo": "hom_C100_MP100_MS14ms_greedy",
             #    "hom_C100_MP100_MS14ms_evo_var": "hom_C100_MP100_MS14ms_greedy",
-       }
+    }
     },
     "hom_C150": {
         "MP30":{
@@ -1345,43 +1434,69 @@ experiments = {
             "hom_C150_MP30_MS14ms_evo": "hom_C150_MP30_MS14ms_greedy",
             #    "hom_C150_MP30_MS14ms_evo_var": "hom_C150_MP30_MS14ms_greedy",
         },
-       "MP50":{
+    "MP70":{
             "hom_C150_MP70_MS1,2ms_evo": "hom_C150_MP70_MS1,2ms_greedy",
             #    "hom_C150_MP70_MS1,2ms_evo_var": "hom_C150_MP70_MS1,2ms_greedy",
             "hom_C150_MP70_MS7ms_evo": "hom_C150_MP70_MS7ms_greedy",
             "hom_C150_MP70_MS14ms_evo": "hom_C150_MP70_MS14ms_greedy",
             #    "hom_C150_MP70_MS14ms_evo_var": "hom_C150_MP70_MS14ms_greedy",
-       },
-       "MP100":{      
+    },
+    "MP100":{      
             "hom_C150_MP100_MS1,2ms_evo": "hom_C150_MP100_MS1,2ms_greedy",
             #    "hom_C150_MP100_MS1,2ms_evo_var": "hom_C150_MP100_MS1,2ms_greedy",
             "hom_C150_MP100_MS7ms_evo": "hom_C150_MP100_MS7ms_greedy",
             "hom_C150_MP100_MS14ms_evo": "hom_C150_MP100_MS14ms_greedy",
             #    "hom_C150_MP100_MS14ms_evo_var": "hom_C150_MP100_MS14ms_greedy",
-       }
-       
+    }
+    
     },
 }
 
+experimentsTest = {
+    "het_C50": {
+        "MP30": {
+            "het_C50_MP30_MS1,2ms_evo": "het_C50_MP30_MS1,2ms_greedy",
+            #"het_C50_MP30_MS1,2ms_evo_var": "het_C50_MP30_MS1,2ms_greedy",
+            "het_C50_MP30_MS7ms_evo": "het_C50_MP30_MS7ms_greedy",
+            "het_C50_MP30_MS14ms_evo": "het_C50_MP30_MS14ms_greedy",
+            #"het_C50_MP30_MS14ms_evo_var": "het_C50_MP30_MS14ms_greedy"
+            }
+    }
+}
+
 ## for creating the diagrams and hv-ratio file
-for network_index, network in enumerate(experiments):
+for _, network in enumerate(experiments):
+
+    for _, mp_name in enumerate(experiments[network]):
+
+        subtitle_list= []
+        for item in list(experiments[network][mp_name]):
+            match = re.search(r"(?<=MS)\d+(?:,\d+)?", item)
+            if match:
+
+                speed = match.group(0)  # Extract the speed value
+                # Format the speed value as desired
+                formatted_speed = f"{speed} m/s"
+                subtitle_list.append(formatted_speed)
 
 
-    for mp_name_index, mp_name in enumerate(experiments[network]):
         subplots4x3 = make_subplots(
             rows=4,
             cols=3,
             shared_yaxes=True,
-            subplot_titles=list(experiments[network][mp_name])
+            # subplot_titles=subtitle_list,
+            column_titles=subtitle_list
             )
 
+        title_text = re.search(r'MP(\d+)', mp_name).group(1) + "% Moving Portion"
         subplots4x3.update_layout(
             template=template_subplot_diagrams,
-            showlegend=False,
+            title_text=title_text,
+            showlegend=False
         )
         subplots4x3.update_annotations(font= {
                 'family': 'Courier New, monospace',
-                'size': 8,
+                'size': 12,
                 'color': 'black'
             }
             )
@@ -1396,7 +1511,7 @@ for network_index, network in enumerate(experiments):
         title_text="HV", row=3, col=1
         )
         subplots4x3.update_yaxes(
-        title_text="HV_ratio", row=4, col=1
+        title_text="HVRATIO", row=4, col=1
         )
         subplots4x3.update_xaxes(
             title_text="ticks", row=4, col=1
@@ -1440,3 +1555,8 @@ for network_index, network in enumerate(experiments):
         subplots4x3.write_image(f"./diagrams/{network}/{mp_name}/MS_compare_plot.pdf")
         remove_blank_page(f"./diagrams/{network}/{mp_name}")
 
+
+create_result_boxplots("het", export_diagrams=True,  show_diagram=False)
+create_result_boxplots("hom", export_diagrams=True,  show_diagram=False)
+        
+create_pareto_history_plots(export_diagrams=True, show_diagram=False)
