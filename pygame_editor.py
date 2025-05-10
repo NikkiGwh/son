@@ -2,8 +2,6 @@ from pygame_gui._constants import UI_BUTTON_PRESSED
 import pygame
 import sys
 import pygame_gui
-import os
-import cProfile
 import re
 from network_simulation_script import ErrorEnum, Network_Simulation_State, default_simulation_params
 from pygame_settings import *
@@ -35,9 +33,12 @@ class CustomConfirmationDialog(pygame_gui.windows.UIConfirmationDialog):
 
         return True
 
+
 dropdown_menue_options_list = ["macro", "micro", "femto", "pico", "cell", "remove"]
 text_input_float_number_type_characters = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "."]
 text_input_integer_number_type_characters = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
+
+
 class Editor():
     def __init__(self, net_sim: Network_Simulation_State) -> None:
         pygame.init()
@@ -214,7 +215,7 @@ class Editor():
         total_energy_efficiency: float = self.net_sim.son.get_total_energy_efficiency()
         avg_energy_efficiency = self.net_sim.son.get_avg_energy_efficiency()
         network_energy_consumption: float = self.net_sim.son.get_total_energy_consumption()
-        objective_text = "user devices<br>avg_rssi: " + str(avg_rssi) + "<br>avg_sinr: " + str(avg_sinr) + "<br>avg_dl_rate: " + str(avg_dl_rate) + "<br>dl_rate_variance: " + str(dl_rate_variance) +  "<br><br>base stations<br>avg_load %: " + str(
+        objective_text = "user devices<br>avg_rssi: " + str(avg_rssi) + "<br>avg_sinr: " + str(avg_sinr) + "<br>avg_dl_rate: " + str(avg_dl_rate) + "<br>dl_rate_variance: " + str(dl_rate_variance) + "<br><br>base stations<br>avg_load %: " + str(
             avg_load) + "<br>total_energy_consumption: " + str(network_energy_consumption) + "<br>total_energy_efficiency: " + str(total_energy_efficiency) + "<br>avg_energy_efficiency: " + str(avg_energy_efficiency)
 
         self.info_text_box_objectives.set_text(objective_text)
@@ -257,7 +258,6 @@ class Editor():
         self.show_edges_checkbox_active = not self.show_edges_checkbox_active
         self.show_edges_toggle.select() if self.show_edges_checkbox_active else self.show_edges_toggle.unselect()
 
-
     def ontoggle_greedy_to_moving(self):
         self.net_sim.config_params["greedy_to_moving"] = not self.net_sim.config_params["greedy_to_moving"]
         self.greedy_to_moving_toggle.select() if self.net_sim.config_params["greedy_to_moving"] else self.greedy_to_moving_toggle.unselect()
@@ -281,12 +281,12 @@ class Editor():
         self.create_algo_param_ui_elements()
 
         self.create_live_param_ui_elements()
-   
+
     def onpress_generate_user_nodes(self):
         percentage = float(self.input_generate_user_nodes.get_text())
         self.net_sim.generate_user_nodes(percentage)
         self.update_network_info_lables()
-    
+
     def onpress_generate_micro_nodes(self):
         bs_count = int(self.input_generate_micro_nodes.get_text())
         self.net_sim.generate_bs_nodes(bs_count, NodeType.MICRO)
@@ -337,17 +337,17 @@ class Editor():
         # reset config params to default
         self.net_sim.config_params = default_simulation_params
         self.net_sim.current_config_name = ""
-       
+
         if event.text != "from file":
             self.net_sim.current_network_name = event.text
             self.ui_container_live_config.enable()
         else:
             self.net_sim.current_network_name = ""
-           
+
             self.dropdown_pick_algo_config.disable()
             self.dropdown_pick_result.disable()
             self.ui_container_live_config.disable()
-           
+
         self.reload_current_network_graph()
         self.create_algo_param_ui_elements()
         self.create_live_param_ui_elements()
@@ -377,22 +377,21 @@ class Editor():
     def on_dropdown_pick_algo_config_changed(self, event: pygame.event.Event):
         if event.text == "from file":
             self.dropdown_pick_result.disable()
-            
+
             self.net_sim.current_config_name = ""
             self.net_sim.config_params = default_simulation_params
         else:
             self.net_sim.current_config_name = event.text
             self.net_sim.load_param_config_from_file(self.net_sim.get_current_config_directory() + event.text + ".json")
-            
-            self.apply_current_network_params_to_ui_and_graph()
 
+            self.apply_current_network_params_to_ui_and_graph()
 
     def on_dropdown_moving_selection_changed(self, event: pygame.event.Event):
         if event.text == "from file":
             self.net_sim.config_params["moving_selection_name"] = ""
         else:
             self.net_sim.config_params["moving_selection_name"] = event.text
-        
+
         self.net_sim.load_current_moving_selection()
 
     def on_dropdown_pick_result_changed(self, event: pygame.event.Event):
@@ -404,7 +403,7 @@ class Editor():
         self.net_sim.config_params["running_mode"] = event.text
 
     def create_live_param_ui_elements(self):
-        
+
         self.ui_container_live_config.kill()
 
         self.ui_container_live_config = pygame_gui.elements.UIPanel(
@@ -483,7 +482,6 @@ class Editor():
             initial_text=str(self.net_sim.config_params["iterations"]))
         self.input_iterations.set_allowed_characters(text_input_integer_number_type_characters)
 
-
     def create_algo_param_ui_elements(self):
         self.ui_container.kill()
         initial_nodeType = self.right_mouse_action if self.right_mouse_action != NodeType.CELL.value else NodeType.MACRO.value
@@ -538,21 +536,23 @@ class Editor():
             object_id="#apply_button",
             text="apply params", manager=self.manager,
             container=self.ui_container)
-       
+
         self.generate_user_nodes_butotn = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
             (320, 260),
             (-1, 30)),
             text="generate user nodes %", manager=self.manager,
             container=self.ui_container)
-        self.input_generate_user_nodes = pygame_gui.elements.UITextEntryLine( pygame.Rect((520, 260), (40, 30)), self.manager, self.ui_container,initial_text= "100")
+        self.input_generate_user_nodes = pygame_gui.elements.UITextEntryLine(
+            pygame.Rect((520, 260), (40, 30)), self.manager, self.ui_container, initial_text="100")
         self.input_generate_user_nodes.set_allowed_characters(text_input_float_number_type_characters)
-       
-        self.generate_micro_nodes_button= pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
+
+        self.generate_micro_nodes_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
             (320, 290),
             (-1, 30)),
             text="generate micro cells %", manager=self.manager,
             container=self.ui_container)
-        self.input_generate_micro_nodes = pygame_gui.elements.UITextEntryLine( pygame.Rect((520, 290), (40, 30)), self.manager, self.ui_container,initial_text= "4")
+        self.input_generate_micro_nodes = pygame_gui.elements.UITextEntryLine(
+            pygame.Rect((520, 290), (40, 30)), self.manager, self.ui_container, initial_text="4")
         self.input_generate_micro_nodes.set_allowed_characters(text_input_float_number_type_characters)
         # network params
 
@@ -582,7 +582,7 @@ class Editor():
             (320, 140), (-1, 30)), "user count: 0", self.manager, self.ui_container)
         self.edge_count_label = pygame_gui.elements.UILabel(pygame.Rect(
             (320, 170), (-1, 30)), "edges: 0", self.manager, self.ui_container)
-        
+
         self.update_network_info_lables()
 
         self.input_channel_bandwidth_label = pygame_gui.elements.UILabel(pygame.Rect(
@@ -594,7 +594,7 @@ class Editor():
 
         self.input_transmission_power_label = pygame_gui.elements.UILabel(pygame.Rect(
             (20, 140), (-1, 30)), "transmission power in dbm", self.manager, self.ui_container)
-       
+
         # transform tx_power in watts from file to dbm for ui
         tx_power_dbm = self.net_sim.watts_to_dbm(self.net_sim.config_params[initial_nodeType]["tx_power"])
         self.input_transmission_power = pygame_gui.elements.UITextEntryLine(pygame.Rect(
@@ -715,7 +715,8 @@ class Editor():
         self.switch_algorithm_mode_toggle = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
             (20, 530), (-1, 30)), text='greedy mode',
             manager=self.manager, container=self.ui_container, object_id="toggle")
-        self.switch_algorithm_mode_toggle.select() if self.net_sim.config_params["use_greedy_assign"] else self.switch_algorithm_mode_toggle.unselect()
+        self.switch_algorithm_mode_toggle.select(
+        ) if self.net_sim.config_params["use_greedy_assign"] else self.switch_algorithm_mode_toggle.unselect()
 
         self.evo_start_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
             (20, 560), (-1, 30)), text='start',
@@ -729,7 +730,7 @@ class Editor():
             (20, 590), (-1, 30)), text='stop',
             manager=self.manager, container=self.ui_container)
         self.evo_stop_button.disable()
-        
+
         self.sim_fps_toggle = pygame_gui.elements.UIButton(
             container=self.ui_container, relative_rect=pygame.Rect((100, 590), (-1, 30)),
             manager=self.manager, text="1-fps-mode", object_id="toggle")
@@ -745,21 +746,21 @@ class Editor():
         self.greedy_to_moving_toggle = pygame_gui.elements.UIButton(relative_rect=pygame.Rect(
             (220, 620),
             (-1, 30)),
-            text='greedy to moving', 
+            text='greedy to moving',
             manager=self.manager,
             object_id="toggle",
             container=self.ui_container)
         self.greedy_to_moving_toggle.select() if self.net_sim.config_params["greedy_to_moving"] else self.greedy_to_moving_toggle.unselect()
 
-
         self.dropdown_pick_algo_config = pygame_gui.elements.UIDropDownMenu(
             options_list=self.net_sim.get_config_names_for_current_network(),
-            starting_option=self.net_sim.get_config_names_for_current_network()[0] if self.net_sim.current_config_name == "" else self.net_sim.current_config_name,
+            starting_option=self.net_sim.get_config_names_for_current_network(
+            )[0] if self.net_sim.current_config_name == "" else self.net_sim.current_config_name,
             relative_rect=pygame.Rect((20, 650), (280, 30)),
             manager=self.manager,
             container=self.ui_container,
         )
-            
+
         self.dropdown_pick_result = pygame_gui.elements.UIDropDownMenu(
             options_list=self.net_sim.get_results_for_current_config(),
             starting_option=self.net_sim.get_results_for_current_config()[0],
@@ -809,8 +810,8 @@ class Editor():
 
     def switch_algorithm_mode(self):
         self.net_sim.config_params["use_greedy_assign"] = not self.net_sim.config_params["use_greedy_assign"]
-        self.switch_algorithm_mode_toggle.select() if self.net_sim.config_params["use_greedy_assign"] else self.switch_algorithm_mode_toggle.unselect()
-
+        self.switch_algorithm_mode_toggle.select(
+        ) if self.net_sim.config_params["use_greedy_assign"] else self.switch_algorithm_mode_toggle.unselect()
 
     def onpress_save_moving_selection(self):
         name = self.input_moving_selection_name.get_text()
@@ -827,7 +828,7 @@ class Editor():
                 action_long_desc="press create moving selection first.",
                 visible=True)
             return
-            
+
         if response == ErrorEnum.NAME_ALREADY_EXISTS.value:
             self.popup.kill()
             self.popup = CustomConfirmationDialog(
@@ -859,10 +860,10 @@ class Editor():
             relative_rect=pygame.Rect((220, 150), (200, 30)),
             manager=self.manager,
             container=self.ui_container_live_config)
-    
+
     def onpress_apply_params_from_ui(self):
         self.net_sim.apply_current_network_params_to_graph()
-    
+
     def onpress_stop_evo(self):
         self.net_sim.force_stop_evo()
 
@@ -923,7 +924,6 @@ class Editor():
         self.create_algo_param_ui_elements()
         self.enable_ui()
 
-
     def onpress_save_network(self):
         response = self.net_sim.save_new_network(self.input_network_name.get_text())
 
@@ -950,9 +950,8 @@ class Editor():
                 visible=True,
             )
             return
-        
-        self.ui_container_live_config.enable()
 
+        self.ui_container_live_config.enable()
 
     def run(self):
         while True:
@@ -967,7 +966,9 @@ class Editor():
             # handle events
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
+
                     pygame.quit()
+
                     sys.exit()
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if self.background.get_rect().collidepoint(event.pos):
@@ -1057,6 +1058,6 @@ class Editor():
 
 if __name__ == "__main__":
     son = Son()
-    main = Editor(Network_Simulation_State(son,script_mode=False))
+    main = Editor(Network_Simulation_State(son, script_mode=False))
     main.run()
     # cProfile.run("main.run()", sort="tottime")
